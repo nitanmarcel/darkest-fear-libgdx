@@ -1,6 +1,8 @@
 package javax.microedition.media;
 
 import java.io.InputStream;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.microedition.media.control.VolumeControlCompat;
 import javax.sound.midi.MidiSystem;
@@ -14,68 +16,85 @@ public class PlayerCompat implements Player {
     private Synthesizer _Synthesizer;
     private Sequence _Sequence;
 
+    private final ExecutorService _Executor = Executors.newSingleThreadExecutor();
+
     public PlayerCompat(InputStream stream) {
         _Stream = stream;
     }
 
-	@Override
-	public Control getControl(String controlType) {
-	    return new VolumeControlCompat(_Synthesizer);
-		//throw new UnsupportedOperationException("Unimplemented method 'getControl'");
-	}
-
-	@Override
-	public void prefetch() throws MediaException {
-    	try {
-         _Sequence = MidiSystem.getSequence(_Stream);
-
-         _Sequencer = MidiSystem.getSequencer(false);
-         _Synthesizer = MidiSystem.getSynthesizer();
-
-         _Sequencer.open();
-         _Synthesizer.open();
-
-         _Sequencer.getTransmitter().setReceiver(_Synthesizer.getReceiver());
-         _Sequencer.setSequence(_Sequence);
+    @Override
+    public Control getControl(String controlType) {
+        return new VolumeControlCompat(_Synthesizer);
+        //throw new UnsupportedOperationException("Unimplemented method 'getControl'");
     }
-    	catch (Exception e) { }
+
+    @Override
+    public void prefetch() throws MediaException {
+        _Executor.execute(() -> {
+            try {
+                _Sequence = MidiSystem.getSequence(_Stream);
+
+                _Sequencer = MidiSystem.getSequencer(false);
+                _Synthesizer = MidiSystem.getSynthesizer();
+
+                _Sequencer.open();
+                _Synthesizer.open();
+
+                _Sequencer.getTransmitter().setReceiver(_Synthesizer.getReceiver());
+                _Sequencer.setSequence(_Sequence);
+            }
+            catch (Exception e) { }
+        });
         //throw new UnsupportedOperationException("Unimplemented method 'prefetch'");
-	}
+    }
 
-	@Override
-	public void start() throws MediaException {
-	    _Sequencer.start();
-		//throw new UnsupportedOperationException("Unimplemented method 'start'");
-	}
+    @Override
+    public void start() throws MediaException {
+        _Executor.execute(() -> {
+            if (_Sequencer != null)
+                _Sequencer.start();
+        });
+        //throw new UnsupportedOperationException("Unimplemented method 'start'");
+    }
 
-	@Override
-	public void stop() throws MediaException {
-	    _Sequencer.stop();
-		//throw new UnsupportedOperationException("Unimplemented method 'stop'");
-	}
+    @Override
+    public void stop() throws MediaException {
+        _Executor.execute(() -> {
+            if (_Sequencer != null)
+                _Sequencer.stop();
+        });
+        //throw new UnsupportedOperationException("Unimplemented method 'stop'");
+    }
 
-	@Override
-	public void deallocate() {
-	    _Sequencer = null;
-		// TODO Auto-generated method stub
-		//throw new UnsupportedOperationException("Unimplemented method 'deallocate'");
-	}
+    @Override
+    public void deallocate() {
+        _Sequencer = null;
+        // TODO Auto-generated method stub
+        //throw new UnsupportedOperationException("Unimplemented method 'deallocate'");
+    }
 
-	@Override
-	public void close() {
-	    _Sequencer.close();
-		//throw new UnsupportedOperationException("Unimplemented method 'close'");
-	}
+    @Override
+    public void close() {
+        _Executor.execute(() -> {
+            if (_Sequencer != null)
+                _Sequencer.close();
+        });
+        _Executor.shutdown();
+        //throw new UnsupportedOperationException("Unimplemented method 'close'");
+    }
 
-	@Override
-	public void setLoopCount(int count) {
-	    _Sequencer.setLoopCount(count);
-		// throw new UnsupportedOperationException("Unimplemented method 'setLoopCount'");
-	}
+    @Override
+    public void setLoopCount(int count) {
+        _Executor.execute(() -> {
+            if (_Sequencer != null)
+                _Sequencer.setLoopCount(count);
+        });
+        // throw new UnsupportedOperationException("Unimplemented method 'setLoopCount'");
+    }
 
-	@Override
-	public int getState() {
-		return _Sequencer.isRunning() ? 1 : 0;
-		//throw new UnsupportedOperationException("Unimplemented method 'getState'");
-	}
+    @Override
+    public int getState() {
+        return _Sequencer != null && _Sequencer.isRunning() ? 1 : 0;
+        //throw new UnsupportedOperationException("Unimplemented method 'getState'");
+    }
 }
