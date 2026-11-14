@@ -1,0 +1,2 @@
+rootProject.name = 'DarkestFear'
+include 'core', 'lwjgl3', 'j2me'

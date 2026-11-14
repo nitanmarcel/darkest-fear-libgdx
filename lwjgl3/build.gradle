@@ -1,0 +1,17 @@
+apply plugin: 'application'
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+    implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+}
+
+sourceSets.main.resources.srcDirs += rootProject.file('assets')
+
+application {
+    mainClass = 'darkestfear.lwjgl3.Lwjgl3Launcher'
+}
+
+run {
+    workingDir = rootProject.file('assets')
+}

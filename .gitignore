@@ -1,0 +1,17 @@
+.gradle/
+build/
+
+libs/darkest_fear_*.jar
+
+.project
+.classpath
+.settings/
+bin/
+.zed/
+.idea/
+*.iml
+out/
+.vscode/
+/nbproject/
+.DS_Store
+Thumbs.db
