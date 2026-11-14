@@ -1,5 +1,7 @@
 package javax.microedition.midlet;
 
+import com.badlogic.gdx.Gdx;
+
 public abstract class MIDlet {
 
     protected MIDlet() {
@@ -15,5 +17,7 @@ public abstract class MIDlet {
     }
 
     public final void notifyDestroyed() {
+        Gdx.app.exit();
+        System.exit(0);
     }
 }
