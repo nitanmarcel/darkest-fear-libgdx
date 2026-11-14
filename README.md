@@ -39,5 +39,5 @@ Requires JDK 21.
 - [x] Text rendering
 - [x] Input
 - [x] Save data
-- [ ] Sound
+- [x] Sound
 - [ ] Gameplay
