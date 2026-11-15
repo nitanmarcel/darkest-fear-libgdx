@@ -11,6 +11,12 @@ final class GameBridge {
     private static boolean failed;
 
     private static Class<?> menuCls;
+    private static Class<?> levelCls;
+    private static Class<?> cutsceneCls;
+    private static Class<?> popupCls;
+    private static Class<?> overlayCls;
+    private static Field fOverlayEvent;
+    private static Field fPendingScreen;
 
     private static Method mGetCurrentScreen;
     private static Method mEnqueue;
@@ -49,7 +55,15 @@ final class GameBridge {
         try {
             Class<?> appCls = Class.forName("l");
             menuCls = Class.forName("f");
+            levelCls = Class.forName("i", false, GameBridge.class.getClassLoader());
+            cutsceneCls = Class.forName("p", false, GameBridge.class.getClassLoader());
+            popupCls = Class.forName("o", false, GameBridge.class.getClassLoader());
+            overlayCls = Class.forName("a", false, GameBridge.class.getClassLoader());
+            fOverlayEvent = findField(overlayCls, "a", int.class);
+            fOverlayEvent.setAccessible(true);
             Class<?> screenCls = Class.forName("r");
+            fPendingScreen = findField(appCls, "b", screenCls);
+            fPendingScreen.setAccessible(true);
             Class<?> resCls = Class.forName("b");
             Class<?> gcCls = Class.forName("q");
             Class<?> soundCls = Class.forName("k");
@@ -117,6 +131,54 @@ final class GameBridge {
         } catch (Throwable t) {
         }
         return -1;
+    }
+
+    static boolean inLevel() {
+        return currentScreenIs(levelCls);
+    }
+
+    static boolean inCutscene() {
+        return currentScreenIs(cutsceneCls);
+    }
+
+    static boolean inPopup() {
+        return currentScreenIs(popupCls);
+    }
+
+    static boolean pendingCutscene() {
+        if (!available()) {
+            return false;
+        }
+        try {
+            Object screen = fPendingScreen.get(null);
+            return screen != null && cutsceneCls.isInstance(screen);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    static boolean inDialog() {
+        if (!available()) {
+            return false;
+        }
+        try {
+            Object screen = mGetCurrentScreen.invoke(null);
+            return screen != null && overlayCls.isInstance(screen) && fOverlayEvent.getInt(screen) != -1;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static boolean currentScreenIs(Class<?> type) {
+        if (!available()) {
+            return false;
+        }
+        try {
+            Object screen = mGetCurrentScreen.invoke(null);
+            return screen != null && type.isInstance(screen);
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     static boolean soundEnabled() {

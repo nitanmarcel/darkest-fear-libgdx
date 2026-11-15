@@ -18,7 +18,7 @@ public class Graphics {
     public static final int VIRTUAL_WIDTH = 240;
     public static final int VIRTUAL_HEIGHT = 320;
 
-    static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
+    public static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
 
     private static SpriteBatch batch;
     private static Texture white;
@@ -70,6 +70,23 @@ public class Graphics {
 
     public static void resized(int width, int height) {
         if (viewport != null) viewport.update(width, height, false);
+    }
+
+    private static OrthographicCamera hudCam;
+
+    public static void beginHud() {
+        if (hudCam == null) hudCam = new OrthographicCamera();
+        int w = Gdx.graphics.getWidth();
+        int h = Gdx.graphics.getHeight();
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        hudCam.setToOrtho(true, w, h);
+        HdpiUtils.glViewport(0, 0, w, h);
+        batch.setProjectionMatrix(hudCam.combined);
+        batch.begin();
+    }
+
+    public static void endHud() {
+        batch.end();
     }
 
     public static void dispose() {

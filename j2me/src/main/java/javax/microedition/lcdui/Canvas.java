@@ -2,6 +2,7 @@ package javax.microedition.lcdui;
 
 import com.badlogic.gdx.Input.Keys;
 
+import darkestfear.menu.GameControls;
 import darkestfear.menu.MenuOverlay;
 
 public abstract class Canvas extends Displayable {
@@ -59,6 +60,12 @@ public abstract class Canvas extends Displayable {
             }
         } finally {
             g.end();
+        }
+        if (GameControls.active()) {
+            GameControls.poll();
+            GameControls.renderHud(g);
+        } else {
+            GameControls.reset();
         }
         synchronized (FRAME_LOCK) {
             frameCount++;
