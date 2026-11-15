@@ -42,3 +42,4 @@ Requires JDK 21.
 - [x] Save data
 - [x] Sound
 - [x] Gameplay
+- [ ] Android
