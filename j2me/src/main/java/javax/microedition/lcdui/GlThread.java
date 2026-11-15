@@ -9,6 +9,10 @@ final class GlThread {
 
     private GlThread() {}
 
+    public static void init() {
+        glThread = Thread.currentThread();
+    }
+
     static <T> T call(final Callable<T> work) {
         if (Thread.currentThread() == glThread) {
             return run(work);

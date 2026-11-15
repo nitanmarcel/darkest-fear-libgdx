@@ -3,64 +3,83 @@ package javax.microedition.lcdui;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
-import com.badlogic.gdx.graphics.Texture.TextureFilter;
-import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 
 import java.io.IOException;
 
 public class Image {
 
-    private final Texture texture;
-    private final FrameBuffer buffer;
+    private final boolean mutable;
     private final int width;
     private final int height;
 
-    private Image(Texture texture, FrameBuffer buffer, int width, int height) {
-        this.texture = texture;
-        this.buffer = buffer;
+    private final Pixmap pixmap;
+    private Texture texture;
+    private boolean dirty;
+
+    private Image(boolean mutable, int width, int height, Pixmap pixmap) {
+        this.mutable = mutable;
         this.width = width;
         this.height = height;
+        this.pixmap = pixmap;
     }
 
     public static Image createImage(int width, int height) {
-        FrameBuffer fb = GlThread.call(() ->
-            new FrameBuffer(Pixmap.Format.RGBA8888, width, height, false));
-        return new Image(null, fb, width, height);
+        Pixmap pm = new Pixmap(width, height, Pixmap.Format.RGBA8888);
+        pm.setBlending(Pixmap.Blending.None);
+        pm.setColor(1f, 1f, 1f, 1f);
+        pm.fill();
+        return new Image(true, width, height, pm);
     }
 
     public static Image createImage(byte[] data, int offset, int length) {
         Pixmap pm = new Pixmap(data, offset, length);
-        Texture tex = GlThread.call(() -> {
-            Texture t = new Texture(pm);
-            t.setFilter(TextureFilter.Nearest, TextureFilter.Nearest);
-            return t;
-        });
-        int w = pm.getWidth();
-        int h = pm.getHeight();
-        pm.dispose();
-        return new Image(tex, null, w, h);
+        return new Image(false, pm.getWidth(), pm.getHeight(), pm);
     }
 
     public static Image createImage(String name) throws IOException {
         String path = name.startsWith("/") ? name.substring(1) : name;
-        Texture tex = GlThread.call(() -> {
-            Texture t = new Texture(Gdx.files.internal(path));
-            t.setFilter(TextureFilter.Nearest, TextureFilter.Nearest);
-            return t;
-        });
-        return new Image(tex, null, tex.getWidth(), tex.getHeight());
+        Pixmap pm = new Pixmap(Gdx.files.internal(path));
+        return new Image(false, pm.getWidth(), pm.getHeight(), pm);
     }
 
     public Graphics getGraphics() {
-        if (buffer == null) {
-            throw new IllegalStateException("immutable image");
+        if (!mutable) {
+            throw new IllegalStateException("getGraphics on immutable image");
         }
-        return new Graphics(buffer);
+        return new Graphics(this);
     }
 
-    public int getWidth()  { return width; }
-    public int getHeight() { return height; }
+    public int getWidth() {
+        return width;
+    }
 
-    Texture texture()        { return texture; }
-    FrameBuffer frameBuffer() { return buffer; }
+    public int getHeight() {
+        return height;
+    }
+
+    Pixmap pixmap() {
+        return pixmap;
+    }
+
+    void markDirty() {
+        dirty = true;
+    }
+
+    Texture texture() {
+        if (texture == null) {
+            texture = GlThread.call(() -> {
+                Texture t = new Texture(pixmap);
+                t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                return t;
+            });
+            dirty = false;
+        } else if (dirty) {
+            GlThread.call(() -> {
+                texture.draw(pixmap, 0, 0);
+                return null;
+            });
+            dirty = false;
+        }
+        return texture;
+    }
 }
