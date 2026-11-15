@@ -40,4 +40,4 @@ Requires JDK 21.
 - [x] Input
 - [x] Save data
 - [x] Sound
-- [ ] Gameplay
+- [x] Gameplay

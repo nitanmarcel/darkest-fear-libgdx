@@ -10,6 +10,8 @@ import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.glutils.HdpiUtils;
 
 public class Graphics {
 
@@ -158,6 +160,23 @@ public class Graphics {
 
     public void setClip(int x, int y, int width, int height) {
         clipX = x; clipY = y; clipW = width; clipH = height;
+        if (target != null) return;
+        if (batch == null || !batch.isDrawing()) return;
+
+        batch.flush();
+
+        float worldW = viewport.getWorldWidth();
+        float worldH = viewport.getWorldHeight();
+        float sx = viewport.getScreenWidth()  / worldW;
+        float sy = viewport.getScreenHeight() / worldH;
+
+        int gx = viewport.getScreenX() + Math.round(x * sx);
+        int gy = viewport.getScreenY() + Math.round((worldH - (y + height)) * sy);
+        int gw = Math.round(width  * sx);
+        int gh = Math.round(height * sy);
+
+        Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
+        HdpiUtils.glScissor(gx, gy, gw, gh);
     }
 
     public int getClipX()      { return clipX; }
