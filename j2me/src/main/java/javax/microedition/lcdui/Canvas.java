@@ -2,6 +2,8 @@ package javax.microedition.lcdui;
 
 import com.badlogic.gdx.Input.Keys;
 
+import darkestfear.menu.MenuOverlay;
+
 public abstract class Canvas extends Displayable {
 
     public static final int UP = 1;
@@ -46,10 +48,13 @@ public abstract class Canvas extends Displayable {
     }
 
     public static void renderFrame(Graphics g) {
+        MenuOverlay.applyPending();
         Displayable d = Display.current();
         g.begin();
         try {
-            if (d instanceof Canvas) {
+            if (MenuOverlay.active()) {
+                MenuOverlay.render(g);
+            } else if (d instanceof Canvas) {
                 ((Canvas) d).paint(g);
             }
         } finally {
@@ -62,13 +67,25 @@ public abstract class Canvas extends Displayable {
     }
 
     public static void dispatchKeyPressed(int keyCode) {
+        if (MenuOverlay.active() && MenuOverlay.keyPressed(keyCode)) {
+            return;
+        }
         Displayable d = Display.current();
         if (d instanceof Canvas) {
             ((Canvas) d).keyPressed(keyCode);
         }
     }
 
+    public static void dispatchScroll(int amountY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.scroll(amountY);
+        }
+    }
+
     public static void dispatchKeyReleased(int keyCode) {
+        if (MenuOverlay.active() && MenuOverlay.consumesInput()) {
+            return;
+        }
         Displayable d = Display.current();
         if (d instanceof Canvas) {
             ((Canvas) d).keyReleased(keyCode);

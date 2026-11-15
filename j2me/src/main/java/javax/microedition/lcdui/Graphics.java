@@ -179,6 +179,14 @@ public class Graphics {
         HdpiUtils.glScissor(gx, gy, gw, gh);
     }
 
+    public static com.badlogic.gdx.math.Vector2 toVirtual(int screenX, int screenY) {
+        com.badlogic.gdx.math.Vector2 v = new com.badlogic.gdx.math.Vector2(screenX, screenY);
+        if (viewport != null) {
+            viewport.unproject(v);
+        }
+        return v;
+    }
+
     public int getClipX()      { return clipX; }
     public int getClipY()      { return clipY; }
     public int getClipWidth()  { return clipW; }

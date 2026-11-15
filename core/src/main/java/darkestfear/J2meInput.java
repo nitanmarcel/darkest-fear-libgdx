@@ -7,6 +7,7 @@ import javax.microedition.lcdui.Canvas;
 public class J2meInput extends InputAdapter {
     @Override public boolean keyDown(int k) { Canvas.dispatchKeyPressed(toJ2me(k)); return true; }
     @Override public boolean keyUp(int k)   { Canvas.dispatchKeyReleased(toJ2me(k)); return true; }
+    @Override public boolean scrolled(float amountX, float amountY) { Canvas.dispatchScroll(Math.round(amountY)); return true; }
 
     private int toJ2me(int k) {
         switch (k) {

@@ -26,7 +26,7 @@ public final class Font {
     private final int style;
     private final int size;
 
-    private final GlyphLayout layout = new GlyphLayout();
+    private static final ThreadLocal<GlyphLayout> LAYOUT = ThreadLocal.withInitial(GlyphLayout::new);
 
     private static final Map<Integer, Font> CACHE = new HashMap<>();
 
@@ -58,6 +58,7 @@ public final class Font {
 
     public int stringWidth(String str) {
         if (str == null || str.isEmpty()) return 0;
+        GlyphLayout layout = LAYOUT.get();
         layout.setText(bitmapFont, str);
         return Math.round(layout.width);
     }

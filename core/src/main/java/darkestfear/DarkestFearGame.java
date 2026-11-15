@@ -2,6 +2,7 @@ package darkestfear;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import javax.microedition.lcdui.Canvas;
@@ -28,6 +29,7 @@ public class DarkestFearGame extends ApplicationAdapter {
 
     @Override
     public void render() {
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
         ScreenUtils.clear(0f, 0f, 0f, 1f);
         Canvas.renderFrame(screen);
     }
