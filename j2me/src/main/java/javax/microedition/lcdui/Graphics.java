@@ -166,13 +166,16 @@ public class Graphics {
     }
 
     public void drawString(String str, int x, int y, int anchor) {
-        if (target != null) return;
-        layout.setText(font, str);
-        x = anchorX(x, (int) layout.width, anchor);
-        if ((anchor & BOTTOM) != 0)       y -= (int) layout.height;
-        else if ((anchor & VCENTER) != 0) y -= (int) layout.height / 2;
-        font.setColor(color);
-        font.draw(batch, str, x, y);
+        if (target != null || font == null || str == null || str.isEmpty()) return;
+        try {
+            layout.setText(font, str);
+            x = anchorX(x, (int) layout.width, anchor);
+            if ((anchor & BOTTOM) != 0)       y -= (int) layout.height;
+            else if ((anchor & VCENTER) != 0) y -= (int) layout.height / 2;
+            font.setColor(color);
+            font.draw(batch, str, x, y);
+        } catch (ArrayIndexOutOfBoundsException ignored) {
+        }
     }
 
     public void setClip(int x, int y, int width, int height) {
