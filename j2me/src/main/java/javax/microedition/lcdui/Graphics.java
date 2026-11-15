@@ -187,6 +187,13 @@ public class Graphics {
         return v;
     }
 
+    public static float screenToWorldScaleY() {
+        if (viewport == null || viewport.getScreenHeight() == 0) {
+            return 1f;
+        }
+        return viewport.getWorldHeight() / viewport.getScreenHeight();
+    }
+
     public int getClipX()      { return clipX; }
     public int getClipY()      { return clipY; }
     public int getClipWidth()  { return clipW; }

@@ -1,10 +1,12 @@
-package javax.microedition.media;
+package darkestfear.lwjgl3.audio;
 
 import java.io.InputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import javax.microedition.media.control.VolumeControlCompat;
+import javax.microedition.media.Control;
+import javax.microedition.media.MediaException;
+import javax.microedition.media.Player;
 import javax.sound.midi.MidiSystem;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.Sequencer;
@@ -25,7 +27,6 @@ public class PlayerCompat implements Player {
     @Override
     public Control getControl(String controlType) {
         return new VolumeControlCompat(_Synthesizer);
-        //throw new UnsupportedOperationException("Unimplemented method 'getControl'");
     }
 
     @Override
@@ -45,7 +46,6 @@ public class PlayerCompat implements Player {
             }
             catch (Exception e) { }
         });
-        //throw new UnsupportedOperationException("Unimplemented method 'prefetch'");
     }
 
     @Override
@@ -54,7 +54,6 @@ public class PlayerCompat implements Player {
             if (_Sequencer != null)
                 _Sequencer.start();
         });
-        //throw new UnsupportedOperationException("Unimplemented method 'start'");
     }
 
     @Override
@@ -63,14 +62,11 @@ public class PlayerCompat implements Player {
             if (_Sequencer != null)
                 _Sequencer.stop();
         });
-        //throw new UnsupportedOperationException("Unimplemented method 'stop'");
     }
 
     @Override
     public void deallocate() {
         _Sequencer = null;
-        // TODO Auto-generated method stub
-        //throw new UnsupportedOperationException("Unimplemented method 'deallocate'");
     }
 
     @Override
@@ -80,7 +76,6 @@ public class PlayerCompat implements Player {
                 _Sequencer.close();
         });
         _Executor.shutdown();
-        //throw new UnsupportedOperationException("Unimplemented method 'close'");
     }
 
     @Override
@@ -89,12 +84,10 @@ public class PlayerCompat implements Player {
             if (_Sequencer != null)
                 _Sequencer.setLoopCount(count);
         });
-        // throw new UnsupportedOperationException("Unimplemented method 'setLoopCount'");
     }
 
     @Override
     public int getState() {
         return _Sequencer != null && _Sequencer.isRunning() ? 1 : 0;
-        //throw new UnsupportedOperationException("Unimplemented method 'getState'");
     }
 }

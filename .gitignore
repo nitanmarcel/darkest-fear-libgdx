@@ -2,6 +2,8 @@
 build/
 
 libs/darkest_fear_*.jar
+local.properties
+android/libs/
 
 .project
 .classpath

@@ -1,17 +1,20 @@
 subprojects {
-    apply plugin: 'java-library'
-
     repositories {
         mavenCentral()
+        google()
     }
 
-    java {
-        toolchain {
-            languageVersion = JavaLanguageVersion.of(21)
+    if (name != 'android') {
+        apply plugin: 'java-library'
+
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
         }
-    }
 
-    tasks.withType(JavaCompile).configureEach {
-        options.encoding = 'UTF-8'
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+        }
     }
 }

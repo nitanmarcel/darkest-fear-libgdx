@@ -82,6 +82,28 @@ public abstract class Canvas extends Displayable {
         }
     }
 
+    public static boolean dispatchTap(int screenX, int screenY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.tap(screenX, screenY);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean dispatchPan(float screenDeltaY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.pan(screenDeltaY);
+            return true;
+        }
+        return false;
+    }
+
+    public static void dispatchHover(int screenX, int screenY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.hover(screenX, screenY);
+        }
+    }
+
     public static void dispatchKeyReleased(int keyCode) {
         if (MenuOverlay.active() && MenuOverlay.consumesInput()) {
             return;

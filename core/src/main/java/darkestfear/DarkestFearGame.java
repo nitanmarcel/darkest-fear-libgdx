@@ -2,7 +2,9 @@ package darkestfear;
 
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.utils.ScreenUtils;
 
 import javax.microedition.lcdui.Canvas;
@@ -17,7 +19,8 @@ public class DarkestFearGame extends ApplicationAdapter {
     public void create() {
         Graphics.init();
         screen = new Graphics(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        Gdx.input.setInputProcessor(new J2meInput());
+        J2meInput input = new J2meInput();
+        Gdx.input.setInputProcessor(new InputMultiplexer(new GestureDetector(input), input));
 
         try {
             midlet = Class.forName("RMIDlet").getDeclaredConstructor().newInstance();
