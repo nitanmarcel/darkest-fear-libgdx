@@ -4,6 +4,7 @@ A libGDX desktop port of the J2ME game **Darkest Fear**, running the original
 game code on top of a small J2ME → libGDX compatibility layer.
 
 ![MainMenu](public/main_menu.png)
+![Gameplay](public/gameplay.png)
 
 ## Build
 
