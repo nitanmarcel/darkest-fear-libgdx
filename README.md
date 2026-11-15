@@ -1,10 +1,11 @@
 # Darkest Fear
 
-A libGDX desktop port of the J2ME game **Darkest Fear**, running the original
-game code on top of a small J2ME → libGDX compatibility layer.
+A libGDX desktop and Android port of the J2ME game **Darkest Fear**, running the
+original game code on top of a small J2ME → libGDX compatibility layer.
 
 ![MainMenu](public/main_menu.png)
 ![Gameplay](public/gameplay.png)
+![Android](public/android_gameplay.png)
 
 ## Build
 
@@ -15,13 +16,32 @@ and place it at:
 ./libs/darkest_fear_v155.jar
 ```
 
-Then run:
+Requires JDK 21.
+
+### Desktop
 
 ```
 ./gradlew lwjgl3:run
 ```
 
-Requires JDK 21.
+### Android
+
+Requires the Android SDK (set `ANDROID_HOME`, or add an `sdk.dir` entry to
+`local.properties`).
+
+Build a debug APK:
+
+```
+./gradlew :android:assembleDebug
+```
+
+The APK is written to `android/build/outputs/apk/debug/android-debug.apk`.
+
+Build and install directly to a connected device:
+
+```
+./gradlew :android:installDebug
+```
 
 ## Controls
 
@@ -42,4 +62,4 @@ Requires JDK 21.
 - [x] Save data
 - [x] Sound
 - [x] Gameplay
-- [ ] Android
+- [x] Android
