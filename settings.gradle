@@ -1,2 +1,13 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+    plugins {
+        id 'com.android.application' version '9.5.0'
+    }
+}
+
 rootProject.name = 'DarkestFear'
-include 'core', 'lwjgl3', 'j2me'
+include 'core', 'lwjgl3', 'j2me', 'android'

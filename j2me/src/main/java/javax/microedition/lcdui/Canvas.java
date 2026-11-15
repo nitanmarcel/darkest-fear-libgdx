@@ -2,6 +2,7 @@ package javax.microedition.lcdui;
 
 import com.badlogic.gdx.Input.Keys;
 
+import darkestfear.menu.GameControls;
 import darkestfear.menu.MenuOverlay;
 
 public abstract class Canvas extends Displayable {
@@ -60,6 +61,12 @@ public abstract class Canvas extends Displayable {
         } finally {
             g.end();
         }
+        if (GameControls.active()) {
+            GameControls.poll();
+            GameControls.renderHud(g);
+        } else {
+            GameControls.reset();
+        }
         synchronized (FRAME_LOCK) {
             frameCount++;
             FRAME_LOCK.notifyAll();
@@ -79,6 +86,28 @@ public abstract class Canvas extends Displayable {
     public static void dispatchScroll(int amountY) {
         if (MenuOverlay.active()) {
             MenuOverlay.scroll(amountY);
+        }
+    }
+
+    public static boolean dispatchTap(int screenX, int screenY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.tap(screenX, screenY);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean dispatchPan(float screenDeltaY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.pan(screenDeltaY);
+            return true;
+        }
+        return false;
+    }
+
+    public static void dispatchHover(int screenX, int screenY) {
+        if (MenuOverlay.active()) {
+            MenuOverlay.hover(screenX, screenY);
         }
     }
 

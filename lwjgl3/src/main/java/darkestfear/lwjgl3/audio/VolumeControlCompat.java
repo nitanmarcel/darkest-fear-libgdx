@@ -1,6 +1,6 @@
+package darkestfear.lwjgl3.audio;
 
-package javax.microedition.media.control;
-
+import javax.microedition.media.control.VolumeControl;
 import javax.sound.midi.MidiChannel;
 import javax.sound.midi.Synthesizer;
 
@@ -10,9 +10,10 @@ public class VolumeControlCompat implements VolumeControl {
     public VolumeControlCompat(Synthesizer synthesizer) {
         _Synthesizer = synthesizer;
     }
-	@Override
-	public int setLevel(int level) {
-    	if (_Synthesizer == null || !_Synthesizer.isOpen()) {
+
+    @Override
+    public int setLevel(int level) {
+        if (_Synthesizer == null || !_Synthesizer.isOpen()) {
             return 0;
         }
 
@@ -24,6 +25,5 @@ public class VolumeControlCompat implements VolumeControl {
             }
         }
         return 1;
-	}
-
+    }
 }

@@ -65,7 +65,8 @@ public final class MenuOverlay {
     private static int lastMenuId = Integer.MIN_VALUE;
     private static int rowTop;
     private static int rowHeight;
-    private static boolean wasTouched;
+    private static int customCount;
+    private static int mirrorCount;
 
     private static volatile boolean pendingFullscreen;
     private static int windowedWidth = 800;
@@ -181,7 +182,7 @@ public final class MenuOverlay {
         String title = menuId == MENU_SETTINGS ? textOr(4, "Settings") : textOr(1, "Darkest Fear");
         drawShadowed(g, title, W / 2, TITLE_Y, COLOR_TITLE);
 
-        updateMouseCustom(items.length);
+        customCount = items.length;
 
         for (int i = 0; i < items.length; i++) {
             int y = rowTop + i * rowHeight;
@@ -290,67 +291,86 @@ public final class MenuOverlay {
             g.drawString(right, W - 4, SOFTKEY_Y, 16 | 8);
         }
 
-        updateMouseMirror(menu, count);
+        mirrorCount = count;
     }
 
-    private static void updateMouseCustom(int n) {
-        if (Gdx.input == null || n == 0) {
-            return;
-        }
-        int hover = hoverRowCustom(n);
-        if (hover != -1) {
-            selected = hover;
-        }
-        boolean touched = Gdx.input.isTouched();
-        if (touched && !wasTouched && hover != -1) {
-            activate(hover);
-        }
-        wasTouched = touched;
-    }
-
-    private static void updateMouseMirror(Object menu, int count) {
-        if (Gdx.input == null) {
-            return;
-        }
-        int hover = hoverRowMirror(count);
-        if (hover != -1) {
-            GameBridge.menuSetSelected(menu, hover);
-        }
-        boolean touched = Gdx.input.isTouched();
-        if (touched && !wasTouched) {
-            if (hover != -1) {
-                Canvas.dispatchKeyPressed(-5);
-            } else {
-                int soft = hoverSoftkey();
-                if (soft == 0) {
-                    Canvas.dispatchKeyPressed(-6);
-                } else if (soft == 1) {
-                    Canvas.dispatchKeyPressed(-7);
-                }
+    public static void tap(int screenX, int screenY) {
+        Vector2 p = Graphics.toVirtual(screenX, screenY);
+        int menuId = GameBridge.currentMenuId();
+        if (isCustom(menuId)) {
+            int row = hoverRowCustom(p.x, p.y, customCount);
+            if (row != -1) {
+                selected = row;
+                activate(row);
             }
+            return;
         }
-        wasTouched = touched;
+        Object menu = GameBridge.currentMenu();
+        if (menu == null) {
+            return;
+        }
+        int row = hoverRowMirror(p.x, p.y, mirrorCount);
+        if (row != -1) {
+            GameBridge.menuSetSelected(menu, row);
+            Canvas.dispatchKeyPressed(-5);
+            return;
+        }
+        int soft = hoverSoftkey(p.x, p.y);
+        if (soft == 0) {
+            Canvas.dispatchKeyPressed(-6);
+        } else if (soft == 1) {
+            Canvas.dispatchKeyPressed(-7);
+        }
     }
 
-    private static int hoverRowCustom(int count) {
-        Vector2 p = Graphics.toVirtual(Gdx.input.getX(), Gdx.input.getY());
-        if (p.x < LIST_X || p.x > LIST_X + LIST_W || p.y < rowTop) {
+    public static void pan(float screenDeltaY) {
+        Object menu = GameBridge.currentMenu();
+        if (menu == null || isCustom(GameBridge.currentMenuId())) {
+            return;
+        }
+        int maxScroll = Math.max(0, mirrorTotal - mirrorAvail);
+        int delta = Math.round(screenDeltaY * Graphics.screenToWorldScaleY());
+        int target = Math.max(0, Math.min(GameBridge.menuScroll(menu) - delta, maxScroll));
+        GameBridge.setMenuScroll(menu, target);
+    }
+
+    public static void hover(int screenX, int screenY) {
+        Vector2 p = Graphics.toVirtual(screenX, screenY);
+        int menuId = GameBridge.currentMenuId();
+        if (isCustom(menuId)) {
+            int row = hoverRowCustom(p.x, p.y, customCount);
+            if (row != -1) {
+                selected = row;
+            }
+            return;
+        }
+        Object menu = GameBridge.currentMenu();
+        if (menu == null) {
+            return;
+        }
+        int row = hoverRowMirror(p.x, p.y, mirrorCount);
+        if (row != -1) {
+            GameBridge.menuSetSelected(menu, row);
+        }
+    }
+
+    private static int hoverRowCustom(float vx, float vy, int count) {
+        if (vx < LIST_X || vx > LIST_X + LIST_W || vy < rowTop) {
             return -1;
         }
-        int idx = (int) ((p.y - rowTop) / rowHeight);
+        int idx = (int) ((vy - rowTop) / rowHeight);
         if (idx >= 0 && idx < count) {
             return idx;
         }
         return -1;
     }
 
-    private static int hoverRowMirror(int count) {
-        Vector2 p = Graphics.toVirtual(Gdx.input.getX(), Gdx.input.getY());
-        if (p.x < LIST_X || p.x > LIST_X + LIST_W
-                || p.y < mirrorListTop || p.y > mirrorListTop + mirrorAvail) {
+    private static int hoverRowMirror(float vx, float vy, int count) {
+        if (vx < LIST_X || vx > LIST_X + LIST_W
+                || vy < mirrorListTop || vy > mirrorListTop + mirrorAvail) {
             return -1;
         }
-        int contentY = (int) p.y - mirrorListTop + mirrorScrollY;
+        int contentY = (int) vy - mirrorListTop + mirrorScrollY;
         for (int i = 0; i < count && i < mirrorTops.length; i++) {
             if (contentY >= mirrorTops[i] && contentY < mirrorTops[i] + mirrorHeights[i]) {
                 return i;
@@ -403,15 +423,11 @@ public final class MenuOverlay {
         }
     }
 
-    private static int hoverSoftkey() {
-        Vector2 p = Graphics.toVirtual(Gdx.input.getX(), Gdx.input.getY());
-        if (p.y < SOFTKEY_Y - rowHeight) {
+    private static int hoverSoftkey(float vx, float vy) {
+        if (vy < SOFTKEY_Y - 16) {
             return -1;
         }
-        if (p.x < W / 2) {
-            return 0;
-        }
-        return 1;
+        return vx < W / 2 ? 0 : 1;
     }
 
     private static void activate(int index) {
