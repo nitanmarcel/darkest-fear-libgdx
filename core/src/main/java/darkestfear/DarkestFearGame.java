@@ -14,6 +14,7 @@ public class DarkestFearGame extends ApplicationAdapter {
 
     private Object midlet;
     private Graphics screen;
+    private boolean paused;
 
     @Override
     public void create() {
@@ -44,8 +45,22 @@ public class DarkestFearGame extends ApplicationAdapter {
         }
         try {
             midlet.getClass().getMethod("pauseApp").invoke(midlet);
+            paused = true;
         } catch (Throwable t) {
             Gdx.app.error("DarkestFear", "RMIDlet.pauseApp() failed", t);
+        }
+    }
+
+    @Override
+    public void resume() {
+        if (midlet == null || !paused) {
+            return;
+        }
+        try {
+            midlet.getClass().getMethod("startApp").invoke(midlet);
+            paused = false;
+        } catch (Throwable t) {
+            Gdx.app.error("DarkestFear", "RMIDlet.startApp() failed", t);
         }
     }
 
