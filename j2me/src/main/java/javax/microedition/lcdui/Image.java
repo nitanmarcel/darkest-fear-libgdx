@@ -1,10 +1,11 @@
 package javax.microedition.lcdui;
 
-import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class Image {
 
@@ -37,8 +38,21 @@ public class Image {
     }
 
     public static Image createImage(String name) throws IOException {
-        String path = name.startsWith("/") ? name.substring(1) : name;
-        Pixmap pm = new Pixmap(Gdx.files.internal(path));
+        String path = name.startsWith("/") ? name : "/" + name;
+        byte[] data;
+        try (InputStream in = Image.class.getResourceAsStream(path)) {
+            if (in == null) {
+                throw new IOException("resource not found: " + path);
+            }
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            data = out.toByteArray();
+        }
+        Pixmap pm = new Pixmap(data, 0, data.length);
         return new Image(false, pm.getWidth(), pm.getHeight(), pm);
     }
 
