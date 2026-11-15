@@ -63,3 +63,7 @@ Build and install directly to a connected device:
 - [x] Sound
 - [x] Gameplay
 - [x] Android
+
+## Port vs Emulator
+
+There's nothing to emulate for J2ME applications, since J2ME is a software platform, not hardware. The main difference is that J2ME's APIs are long deprecated and unusable on modern platforms, so they need to be reimplemented from scratch. It's basically what J2ME-Loader does but the main difference here is it that one is more general targeted the other is targeted to running a single target and has more wiring into that said target. But neither is an emulator as we know it.
