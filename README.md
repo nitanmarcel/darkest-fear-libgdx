@@ -64,6 +64,14 @@ Build and install directly to a connected device:
 - [x] Gameplay
 - [x] Android
 
-## Port vs Emulator
+## How does it work
 
-There's nothing to emulate for J2ME applications, since J2ME is a software platform, not hardware. The main difference is that J2ME's APIs are long deprecated and unusable on modern platforms, so they need to be reimplemented from scratch. It's basically what J2ME-Loader does but the main difference here is it that one is more general targeted the other is targeted to running a single target and has more wiring into that said target. But neither is an emulator as we know it.
+J2ME apps are compiled to ordinary JVM bytecode (with CLDC preverification and a restricted class library). Any modern JVM can still load and run that bytecode — what's missing is the platform layer, `javax.microedition.*`, which on a real device bridged the app to the handset's screen, input, and sound.
+
+This project reimplements that platform layer so the original game runs unmodified outside a J2ME environment.
+
+### Emulator vs port
+
+An emulator reproduces a whole device — CPU, hardware, and all — and runs the app as a guest inside it. This does neither. The original bytecode executes natively on the host's Java runtime, and its graphics and input calls are mapped directly onto [libGDX](https://libgdx.com/).
+
+So it's a port rather than an emulator: one game, running on its own code, with a thin compatibility layer standing in for the phone.
