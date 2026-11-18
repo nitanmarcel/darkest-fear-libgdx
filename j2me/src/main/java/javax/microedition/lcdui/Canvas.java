@@ -61,6 +61,7 @@ public abstract class Canvas extends Displayable {
         } finally {
             g.end();
         }
+        Graphics.present();
         if (GameControls.active()) {
             GameControls.poll();
             GameControls.renderHud(g);

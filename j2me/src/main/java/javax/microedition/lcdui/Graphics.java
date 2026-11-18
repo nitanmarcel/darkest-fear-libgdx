@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
 import com.badlogic.gdx.graphics.glutils.HdpiUtils;
 
 public class Graphics {
@@ -23,6 +24,9 @@ public class Graphics {
     private static SpriteBatch batch;
     private static Texture white;
     private static Viewport viewport;
+
+    private static FrameBuffer sceneFbo;
+    private static OrthographicCamera sceneCam;
 
     private final Image target;
     private final Pixmap pixmap;
@@ -66,6 +70,16 @@ public class Graphics {
         viewport = new FitViewport(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, cam);
         cam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), false);
+
+        sceneFbo = new FrameBuffer(Pixmap.Format.RGBA8888, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, false);
+        sceneFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        sceneCam = new OrthographicCamera();
+        sceneCam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+        sceneCam.update();
+        sceneFbo.begin();
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        sceneFbo.end();
     }
 
     public static void resized(int width, int height) {
@@ -92,17 +106,33 @@ public class Graphics {
     public static void dispose() {
         if (batch != null) batch.dispose();
         if (white != null) white.dispose();
+        if (sceneFbo != null) sceneFbo.dispose();
     }
 
     void begin() {
         if (target != null) return;
-        viewport.apply();
-        batch.setProjectionMatrix(viewport.getCamera().combined);
+        sceneFbo.begin();
+        batch.setProjectionMatrix(sceneCam.combined);
         batch.begin();
     }
 
     void end() {
         if (target != null) return;
+        batch.end();
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        sceneFbo.end();
+    }
+
+    public static void present() {
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        viewport.apply();
+        batch.setProjectionMatrix(viewport.getCamera().combined);
+        batch.begin();
+        batch.setColor(Color.WHITE);
+        Texture t = sceneFbo.getColorBufferTexture();
+        batch.draw(t, 0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0, 0, t.getWidth(), t.getHeight(), false, false);
         batch.end();
     }
 
@@ -185,18 +215,19 @@ public class Graphics {
 
         batch.flush();
 
-        float worldW = viewport.getWorldWidth();
-        float worldH = viewport.getWorldHeight();
-        float sx = viewport.getScreenWidth()  / worldW;
-        float sy = viewport.getScreenHeight() / worldH;
-
-        int gx = viewport.getScreenX() + Math.round(x * sx);
-        int gy = viewport.getScreenY() + Math.round((worldH - (y + height)) * sy);
-        int gw = Math.round(width  * sx);
-        int gh = Math.round(height * sy);
+        int gx = x;
+        int gy = VIRTUAL_HEIGHT - (y + height);
+        int gw = width;
+        int gh = height;
+        if (gx < 0) { gw += gx; gx = 0; }
+        if (gy < 0) { gh += gy; gy = 0; }
+        if (gx + gw > VIRTUAL_WIDTH)  gw = VIRTUAL_WIDTH - gx;
+        if (gy + gh > VIRTUAL_HEIGHT) gh = VIRTUAL_HEIGHT - gy;
+        if (gw < 0) gw = 0;
+        if (gh < 0) gh = 0;
 
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
-        HdpiUtils.glScissor(gx, gy, gw, gh);
+        Gdx.gl.glScissor(gx, gy, gw, gh);
     }
 
     public static com.badlogic.gdx.math.Vector2 toVirtual(int screenX, int screenY) {
