@@ -7,6 +7,8 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.input.GestureDetector;
 import com.badlogic.gdx.utils.ScreenUtils;
 
+import darkestfear.debug.Debug;
+
 import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.Graphics;
 
@@ -29,6 +31,8 @@ public class DarkestFearGame extends ApplicationAdapter {
         } catch (Throwable t) {
             Gdx.app.error("DarkestFear", "RMIDlet.startApp() failed", t);
         }
+
+        Debug.ui().init();
     }
 
     @Override
@@ -36,6 +40,7 @@ public class DarkestFearGame extends ApplicationAdapter {
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
         ScreenUtils.clear(0f, 0f, 0f, 1f);
         Canvas.renderFrame(screen);
+        Debug.ui().render();
     }
 
     @Override
@@ -66,6 +71,7 @@ public class DarkestFearGame extends ApplicationAdapter {
 
     @Override
     public void dispose() {
+        Debug.ui().dispose();
         if (midlet == null) {
             return;
         }

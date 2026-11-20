@@ -8,6 +8,7 @@ import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.GlyphLayout;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.graphics.glutils.ShaderProgram;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import com.badlogic.gdx.graphics.GL20;
@@ -18,15 +19,34 @@ public class Graphics {
 
     public static final int VIRTUAL_WIDTH = 240;
     public static final int VIRTUAL_HEIGHT = 320;
+    public static final int RENDER_SCALE = 4;
+    public static final int FBO_W = VIRTUAL_WIDTH * RENDER_SCALE;
+    public static final int FBO_H = VIRTUAL_HEIGHT * RENDER_SCALE;
 
     public static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
 
-    private static SpriteBatch batch;
-    private static Texture white;
+    static SpriteBatch batch;
+    static Texture white;
     private static Viewport viewport;
 
-    private static FrameBuffer sceneFbo;
-    private static OrthographicCamera sceneCam;
+    static FrameBuffer gameFbo;
+    static OrthographicCamera gameCam;
+    private static boolean gameTargetActive;
+
+    static int playAreaH = VIRTUAL_HEIGHT;
+
+    static ShaderProgram sceneLightShader;
+    static ShaderProgram objectLightShader;
+
+    static final int TILE = 16;
+    private static final String LIGHT_STORE = "df_light";
+    static boolean lightingEnabled = true;
+
+    static boolean sceneClassifyDebug;
+
+    public static void setSceneClassifyDebug(boolean on) {
+        sceneClassifyDebug = on;
+    }
 
     private final Image target;
     private final Pixmap pixmap;
@@ -71,15 +91,34 @@ public class Graphics {
         cam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
         viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), false);
 
-        sceneFbo = new FrameBuffer(Pixmap.Format.RGBA8888, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, false);
-        sceneFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-        sceneCam = new OrthographicCamera();
-        sceneCam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
-        sceneCam.update();
-        sceneFbo.begin();
+        gameFbo = new FrameBuffer(Pixmap.Format.RGBA8888, FBO_W, FBO_H, false);
+        gameFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        gameCam = new OrthographicCamera();
+        gameCam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+        gameFbo.begin();
         Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        sceneFbo.end();
+        gameFbo.end();
+
+        ShaderProgram.pedantic = false;
+        LightEngine.lightShader = loadShader("post", "light");
+        LightEngine.kawaseDownShader = loadShader("post", "kawase_down");
+        LightEngine.kawaseUpShader = loadShader("post", "kawase_up");
+        sceneLightShader = loadShader("scenelight", "scenelight");
+        objectLightShader = loadShader("objectlight", "objectlight");
+        lightingEnabled = loadFlag(LIGHT_STORE, true);
+    }
+
+    static ShaderProgram loadShader(String vert, String frag) {
+        ShaderProgram shader = new ShaderProgram(
+                Gdx.files.internal("shaders/" + vert + ".vert"),
+                Gdx.files.internal("shaders/" + frag + ".frag"));
+        if (!shader.isCompiled()) {
+            Gdx.app.error("Graphics", "shader " + frag + " failed: " + shader.getLog());
+            shader.dispose();
+            return null;
+        }
+        return shader;
     }
 
     public static void resized(int width, int height) {
@@ -106,33 +145,120 @@ public class Graphics {
     public static void dispose() {
         if (batch != null) batch.dispose();
         if (white != null) white.dispose();
-        if (sceneFbo != null) sceneFbo.dispose();
+        if (gameFbo != null) gameFbo.dispose();
+        if (sceneLightShader != null) sceneLightShader.dispose();
+        if (objectLightShader != null) objectLightShader.dispose();
+        SceneCompositor.dispose();
+        LightEngine.dispose();
     }
 
     void begin() {
         if (target != null) return;
-        sceneFbo.begin();
-        batch.setProjectionMatrix(sceneCam.combined);
-        batch.begin();
+        int ph = darkestfear.menu.LightBridge.playHeight();
+        if (ph > 0) {
+            playAreaH = ph;
+        }
+        darkestfear.menu.LightBridge.normalizeIdlePlayerColumn();
+        gameTargetActive = true;
+        SceneCompositor.begin();
     }
 
     void end() {
         if (target != null) return;
+        gameTargetActive = false;
+        SceneCompositor.end();
+        SceneCompositor.composite(gameFbo);
+    }
+
+    private static int overlayBand(int y) {
+        return y >= playAreaH ? SceneCompositor.HUD : SceneCompositor.FX;
+    }
+
+    public static void beginOverlay() {
+        if (gameFbo == null) return;
+        gameFbo.begin();
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        gameTargetActive = true;
+        batch.setProjectionMatrix(gameCam.combined);
+        batch.begin();
+    }
+
+    public static void endOverlay() {
+        if (gameFbo == null) return;
         batch.end();
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
-        sceneFbo.end();
+        gameTargetActive = false;
+        gameFbo.end();
+    }
+
+    public static boolean isLightingEnabled() {
+        return lightingEnabled;
+    }
+
+    public static void setLightingEnabled(boolean enabled) {
+        lightingEnabled = enabled;
+        saveFlag(LIGHT_STORE, enabled);
+        if (!enabled) {
+            darkestfear.menu.LightBridge.restoreFloor();
+        }
+    }
+
+    private static boolean loadFlag(String store, boolean def) {
+        try {
+            javax.microedition.rms.RecordStore rs =
+                    javax.microedition.rms.RecordStore.openRecordStore(store, false);
+            byte[] rec = rs.getRecord(1);
+            rs.closeRecordStore();
+            if (rec != null && rec.length > 0) {
+                return rec[0] != 0;
+            }
+        } catch (Throwable t) {
+        }
+        return def;
+    }
+
+    private static void saveFlag(String store, boolean value) {
+        try {
+            javax.microedition.rms.RecordStore rs =
+                    javax.microedition.rms.RecordStore.openRecordStore(store, true);
+            rs.setRecord(1, new byte[]{(byte) (value ? 1 : 0)}, 0, 1);
+            rs.closeRecordStore();
+        } catch (Throwable t) {
+        }
+    }
+
+    public static void prepareLightmap() {
+        if (!lightingEnabled) {
+            darkestfear.menu.LightBridge.rebakeRestoredFloor();
+            return;
+        }
+        if (gameFbo == null) {
+            return;
+        }
+        darkestfear.menu.LightBridge.LightState s = darkestfear.menu.LightBridge.read();
+        if (s == null) {
+            return;
+        }
+        darkestfear.menu.LightBridge.flattenFloor(s.playerRow, s.playerCol);
+        LightEngine.render(s);
     }
 
     public static void present() {
-        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        if (gameFbo == null) return;
+
+        boolean menu = darkestfear.menu.MenuOverlay.active() || darkestfear.menu.GameBridge.inCutscene();
+
+        Texture tex = gameFbo.getColorBufferTexture();
+
         viewport.apply();
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+
         batch.setProjectionMatrix(viewport.getCamera().combined);
+        batch.setShader(null);
         batch.begin();
         batch.setColor(Color.WHITE);
-        Texture t = sceneFbo.getColorBufferTexture();
-        batch.draw(t, 0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0, 0, t.getWidth(), t.getHeight(), false, false);
+        batch.draw(tex, 0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0, 0, tex.getWidth(), tex.getHeight(), false, false);
         batch.end();
     }
 
@@ -155,6 +281,7 @@ public class Graphics {
             pixmap.fillRectangle(cx, cy, cw, ch);
             target.markDirty();
         } else {
+            SceneCompositor.setBand(overlayBand(y));
             batch.draw(white, x, y, width, height);
         }
     }
@@ -173,6 +300,7 @@ public class Graphics {
             pixmap.drawLine(x1, y1, x2, y2);
             target.markDirty();
         } else {
+            SceneCompositor.setBand(overlayBand(Math.min(y1, y2)));
             float dx = x2 - x1, dy = y2 - y1;
             float len = (float) Math.sqrt(dx * dx + dy * dy);
             float ang = (float) Math.toDegrees(Math.atan2(dy, dx));
@@ -185,13 +313,25 @@ public class Graphics {
         x = anchorX(x, iw, anchor);
         y = anchorY(y, ih, anchor);
         if (target != null) {
+            if (darkestfear.menu.LightBridge.isTileObjectSheet(img)) return;
             if (!clipTo(x, y, iw, ih)) return;
-            int srcX = cx - x, srcY = cy - y;
             pixmap.setBlending(Pixmap.Blending.SourceOver);
-            pixmap.drawPixmap(img.pixmap(), cx, cy, srcX, srcY, cw, ch);
+            pixmap.drawPixmap(img.pixmap(), cx, cy, cx - x, cy - y, cw, ch);
             target.markDirty();
-        } else {
+        } else if (img.isMutable()) {
+            if (SceneCompositor.levelPainted()) {
+                setClip(clipX, clipY, clipW, clipH);
+            }
+            SceneCompositor.setBand(SceneCompositor.FLOOR);
             batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+        } else {
+            if (clipY >= playAreaH) {
+                SceneCompositor.setBand(SceneCompositor.HUD);
+            } else {
+                SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
+            }
+            batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            batch.setColor(Color.WHITE);
         }
     }
 
@@ -203,6 +343,7 @@ public class Graphics {
             if ((anchor & BOTTOM) != 0)       y -= (int) layout.height;
             else if ((anchor & VCENTER) != 0) y -= (int) layout.height / 2;
             font.setColor(color);
+            SceneCompositor.setBand(overlayBand(y));
             font.draw(batch, str, x, y);
         } catch (ArrayIndexOutOfBoundsException ignored) {
         }
@@ -215,19 +356,25 @@ public class Graphics {
 
         batch.flush();
 
-        int gx = x;
-        int gy = VIRTUAL_HEIGHT - (y + height);
-        int gw = width;
-        int gh = height;
-        if (gx < 0) { gw += gx; gx = 0; }
-        if (gy < 0) { gh += gy; gy = 0; }
-        if (gx + gw > VIRTUAL_WIDTH)  gw = VIRTUAL_WIDTH - gx;
-        if (gy + gh > VIRTUAL_HEIGHT) gh = VIRTUAL_HEIGHT - gy;
-        if (gw < 0) gw = 0;
-        if (gh < 0) gh = 0;
+        if (gameTargetActive) {
+            int s = RENDER_SCALE;
+            Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
+            Gdx.gl.glScissor(x * s, FBO_H - (y + height) * s, width * s, height * s);
+            return;
+        }
+
+        float worldW = viewport.getWorldWidth();
+        float worldH = viewport.getWorldHeight();
+        float sx = viewport.getScreenWidth()  / worldW;
+        float sy = viewport.getScreenHeight() / worldH;
+
+        int gx = viewport.getScreenX() + Math.round(x * sx);
+        int gy = viewport.getScreenY() + Math.round((worldH - (y + height)) * sy);
+        int gw = Math.round(width  * sx);
+        int gh = Math.round(height * sy);
 
         Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
-        Gdx.gl.glScissor(gx, gy, gw, gh);
+        HdpiUtils.glScissor(gx, gy, gw, gh);
     }
 
     public static com.badlogic.gdx.math.Vector2 toVirtual(int screenX, int screenY) {

@@ -1,0 +1,461 @@
+package javax.microedition.lcdui;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.graphics.glutils.ShaderProgram;
+
+import darkestfear.menu.LightBridge;
+
+final class SceneCompositor {
+
+    private SceneCompositor() {
+    }
+
+    static final int FLOOR = 0, DECAL = 1, OBJECTS = 2, ACTORS = 3, OVERHANG = 4, FX = 5, HUD = 6;
+    private static final int BAND_COUNT = 7;
+
+    private static final boolean[] PERSIST = {false, false, false, false, false, false, true};
+    private static final boolean[] FLOOR_LIT = {true, true, false, false, false, false, false};
+    private static final boolean[] PER_SPRITE = {false, false, true, true, true, false, false};
+
+    private static final int CLS_WALL = 1, CLS_PROP = 2, CLS_ACTOR = 3, CLS_LOW = 4;
+    private static final float WHITE = Color.WHITE.toFloatBits();
+
+    private static final float STRUCT_FLOOR = 0.07f;
+    private static final float AMB_R = 0.040f, AMB_G = 0.035f, AMB_B = 0.065f;
+
+    private static final int[] EAST_THEN_SOUTH = {0, 1, 1, 0};
+    private static final int[] SOUTH_THEN_NORTH = {1, 0, -1, 0};
+    private static final int[] EAST_WEST = {0, 1, 0, -1};
+    private static final int[] EAST_WEST_NORTH = {0, 1, 0, -1, -1, 0};
+
+    private static final FrameBuffer[] bands = new FrameBuffer[BAND_COUNT];
+    private static FrameBuffer classifyFbo;
+    private static int current = FLOOR;
+    private static boolean active;
+
+    private static LightBridge.LightState frame;
+    private static int[] tileSid;
+    private static float[] capColor;
+    private static int selR, selC;
+
+    static FrameBuffer band(int i) {
+        return i >= 0 && i < BAND_COUNT ? bands[i] : null;
+    }
+
+    private static void ensure() {
+        if (bands[0] != null) {
+            return;
+        }
+        for (int i = 0; i < BAND_COUNT; i++) {
+            FrameBuffer fb = new FrameBuffer(Pixmap.Format.RGBA8888, Graphics.FBO_W, Graphics.FBO_H, false);
+            fb.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            fb.begin();
+            Gdx.gl.glClearColor(0f, 0f, 0f, 0f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+            fb.end();
+            bands[i] = fb;
+        }
+    }
+
+    static void begin() {
+        ensure();
+        for (int i = 0; i < BAND_COUNT; i++) {
+            if (PERSIST[i]) {
+                continue;
+            }
+            bands[i].begin();
+            Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+            Gdx.gl.glClearColor(0f, 0f, 0f, 0f);
+            Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+            bands[i].end();
+        }
+        frame = null;
+        current = FLOOR;
+        active = true;
+        bands[FLOOR].begin();
+        Gdx.gl.glViewport(0, 0, Graphics.FBO_W, Graphics.FBO_H);
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        Graphics.batch.setProjectionMatrix(Graphics.gameCam.combined);
+        Graphics.batch.setShader(null);
+        Graphics.batch.begin();
+    }
+
+    static void setBand(int b) {
+        if (!active || b == current || Graphics.batch == null || !Graphics.batch.isDrawing()) {
+            return;
+        }
+        Graphics.batch.end();
+        bands[current].end();
+        current = b;
+        bands[b].begin();
+        Gdx.gl.glViewport(0, 0, Graphics.FBO_W, Graphics.FBO_H);
+        Graphics.batch.setProjectionMatrix(Graphics.gameCam.combined);
+        Graphics.batch.setShader(PER_SPRITE[b] ? Graphics.objectLightShader : null);
+        Graphics.batch.begin();
+        if (PER_SPRITE[b] && Graphics.objectLightShader != null) {
+            configureObjectShader(false);
+        }
+    }
+
+    static void end() {
+        if (!active) {
+            return;
+        }
+        Graphics.batch.end();
+        Graphics.batch.setShader(null);
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        bands[current].end();
+        active = false;
+    }
+
+    private static boolean lit() {
+        return Graphics.lightingEnabled && LightEngine.lightmap() != null;
+    }
+
+    private static void configureObjectShader(boolean debug) {
+        ShaderProgram sh = Graphics.objectLightShader;
+        boolean lit = lit();
+        float[] cap = capColor();
+        float[] bounce = LightEngine.bounceGain();
+        sh.setUniformi("u_light", 1);
+        sh.setUniformi("u_bounce", 2);
+        sh.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
+        sh.setUniformf("u_screen", Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT);
+        sh.setUniformf("u_lit", lit ? 1f : 0f);
+        sh.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+        sh.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
+        sh.setUniformf("u_capColor", cap[0], cap[1], cap[2]);
+        sh.setUniformf("u_structFloor", STRUCT_FLOOR);
+        sh.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);
+        sh.setUniformf("u_actorPixel", LightTuning.actorPixel);
+        sh.setUniformf("u_wallSoft", LightTuning.wallSoft);
+        sh.setUniformf("u_debug", debug ? 1f : 0f);
+        if (lit) {
+            LightEngine.lightmap().bind(1);
+            LightEngine.bounce().bind(2);
+            Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
+        }
+    }
+
+    private static float[] capColor() {
+        if (capColor == null) {
+            int sid = LightBridge.tileSpriteId(-40);
+            short[] a = LightBridge.spriteAttr(sid);
+            Object img = LightBridge.spriteImage(sid);
+            if (a == null || !(img instanceof Image)) {
+                return new float[] {-1f, -1f, -1f};
+            }
+            int p = ((Image) img).pixmap().getPixel(a[0], a[1]);
+            capColor = new float[] {(p >>> 24 & 255) / 255f, (p >>> 16 & 255) / 255f, (p >>> 8 & 255) / 255f};
+        }
+        return capColor;
+    }
+
+    static boolean levelPainted() {
+        if (frame != null || !active) {
+            return false;
+        }
+        LightBridge.LightState s = LightBridge.read();
+        if (s == null || s.grid == null) {
+            return false;
+        }
+        frame = s;
+        setBand(OBJECTS);
+        Graphics.batch.flush();
+        int sc = Graphics.RENDER_SCALE;
+        Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
+        Gdx.gl.glScissor(0, Graphics.FBO_H - Graphics.playAreaH * sc, Graphics.FBO_W, Graphics.playAreaH * sc);
+        drawObjects(s);
+        Graphics.batch.flush();
+        return true;
+    }
+
+    private static void drawObjects(LightBridge.LightState s) {
+        if (tileSid == null) {
+            tileSid = new int[129];
+            for (int code = -128; code < 0; code++) {
+                tileSid[-code] = LightBridge.tileSpriteId(code);
+            }
+        }
+        boolean perSprite = Graphics.objectLightShader != null;
+        int ox = Graphics.VIRTUAL_WIDTH / 2 - s.camX;
+        int oy = Graphics.playAreaH / 2 - s.camY;
+        for (int r = 0; r < s.rows; r++) {
+            for (int c = 0; c < s.cols; c++) {
+                int code = s.grid[r][c];
+                if (code >= 0) {
+                    continue;
+                }
+                int sid = tileSid[-code];
+                short[] a = LightBridge.spriteAttr(sid);
+                Object img = LightBridge.spriteImage(sid);
+                if (a == null || !(img instanceof Image)) {
+                    continue;
+                }
+                int x = c * Graphics.TILE + ox - a[4];
+                int y = r * Graphics.TILE + oy - a[5];
+                if (x + a[2] <= 0 || x >= Graphics.VIRTUAL_WIDTH || y + a[3] <= 0 || y >= Graphics.playAreaH) {
+                    continue;
+                }
+                if (perSprite && isSideDoor(code)) {
+                    int py = r * Graphics.TILE + oy;
+                    int west = a[4];
+                    Graphics.batch.setPackedColor(pack((c - 1) * Graphics.TILE + ox, py, CLS_PROP, ALONG_Y));
+                    Graphics.batch.draw(((Image) img).texture(), x, y, west, a[3], a[0], a[1], west, a[3], false, true);
+                    Graphics.batch.setPackedColor(pack((c + 1) * Graphics.TILE + ox, py, CLS_PROP, ALONG_Y));
+                    Graphics.batch.draw(((Image) img).texture(), x + west, y, a[2] - west, a[3],
+                            a[0] + west, a[1], a[2] - west, a[3], false, true);
+                    continue;
+                }
+                if (perSprite && isWallPiece(code) && r + 1 < s.rows && isSideDoor(s.grid[r + 1][c])) {
+                    int west = a[4];
+                    Graphics.batch.setPackedColor(pack((c - 1) * Graphics.TILE + ox, (r + 1) * Graphics.TILE + oy,
+                            CLS_WALL, FLAT));
+                    Graphics.batch.draw(((Image) img).texture(), x, y, west, a[3], a[0], a[1], west, a[3], false, true);
+                    Graphics.batch.setPackedColor(tileBits(s, r, c));
+                    Graphics.batch.draw(((Image) img).texture(), x + west, y, a[2] - west, a[3],
+                            a[0] + west, a[1], a[2] - west, a[3], false, true);
+                    continue;
+                }
+                short[] door = perSprite && isWallPiece(code) && c + 1 < s.cols && isFrontDoor(s.grid[r][c + 1])
+                        ? LightBridge.spriteAttr(tileSid[-s.grid[r][c + 1]]) : null;
+                int tipX = door == null ? 0 : a[4] + Graphics.TILE - door[4], tipH = door == null ? 0 : a[5] - door[5];
+                if (door != null && tipX > 0 && tipX < a[2] && tipH > 0 && tipH < a[3]) {
+                    Graphics.batch.setPackedColor(pack((c + 1) * Graphics.TILE + ox, (r - 1) * Graphics.TILE + oy,
+                            CLS_WALL, FLAT));
+                    Graphics.batch.draw(((Image) img).texture(), x + tipX, y, a[2] - tipX, tipH,
+                            a[0] + tipX, a[1], a[2] - tipX, tipH, false, true);
+                    Graphics.batch.setPackedColor(tileBits(s, r, c));
+                    Graphics.batch.draw(((Image) img).texture(), x, y, tipX, a[3], a[0], a[1], tipX, a[3], false, true);
+                    Graphics.batch.draw(((Image) img).texture(), x + tipX, y + tipH, a[2] - tipX, a[3] - tipH,
+                            a[0] + tipX, a[1] + tipH, a[2] - tipX, a[3] - tipH, false, true);
+                    continue;
+                }
+                Graphics.batch.setPackedColor(perSprite ? tileBits(s, r, c) : WHITE);
+                Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+            }
+        }
+        Graphics.batch.setPackedColor(WHITE);
+    }
+
+    static void routeSprite(Image img, int drawX, int drawY, int srcX, int srcY, int w, int h) {
+        LightBridge.LightState s = frame;
+        int id = s == null ? -1 : LightBridge.spriteAt(img, srcX, srcY, w, h);
+        short[] a = id < 0 ? null : LightBridge.spriteAttr(id);
+        if (a == null) {
+            setBand(ACTORS);
+            return;
+        }
+        if (isDecal(id)) {
+            setBand(DECAL);
+            return;
+        }
+        boolean perSprite = Graphics.objectLightShader != null;
+        int px = drawX + a[0] + a[4];
+        int py = drawY + a[1] + a[5];
+        int ox = Graphics.VIRTUAL_WIDTH / 2 - s.camX;
+        int oy = Graphics.playAreaH / 2 - s.camY;
+        int col = Math.floorDiv(px - ox + Graphics.TILE / 2, Graphics.TILE);
+        int row = Math.floorDiv(py - oy + Graphics.TILE / 2, Graphics.TILE);
+        boolean inGrid = row >= 0 && row < s.rows && col >= 0 && col < s.cols;
+        if (LightBridge.isTileSprite(id)) {
+            setBand(OVERHANG);
+            if (perSprite && inGrid && isSideDoor(s.grid[row][col])) {
+                Graphics.batch.setColor(0f, 0f, 0f, 0f);
+            } else if (perSprite && inGrid && s.grid[row][col] < 0) {
+                Graphics.batch.setPackedColor(tileBits(s, row, col));
+            }
+            return;
+        }
+        setBand(ACTORS);
+        if (perSprite) {
+            Graphics.batch.setPackedColor(pack(px, py, CLS_ACTOR, FLAT));
+        }
+    }
+
+    private static boolean isDecal(int id) {
+        return id == 45 || id == 30 || id == 82 || id == 83 || id == 86 || id == 98;
+    }
+
+    private static boolean isFrontDoor(int code) {
+        return code == -12 || code == -14 || code == -16 || code == -100;
+    }
+
+    private static boolean isSideDoor(int code) {
+        return code == -13 || code == -15 || code == -17 || code == -101;
+    }
+
+    private static boolean isWallPiece(int code) {
+        return (code <= -1 && code >= -6) || code == -40;
+    }
+
+    private static boolean open(LightBridge.LightState s, int r, int c) {
+        return r >= 0 && r < s.rows && c >= 0 && c < s.cols && s.grid[r][c] >= 0;
+    }
+
+    private static boolean firstOpen(LightBridge.LightState s, int r, int c, int[] dirs) {
+        for (int i = 0; i < dirs.length; i += 2) {
+            if (open(s, r + dirs[i], c + dirs[i + 1])) {
+                selR = r + dirs[i];
+                selC = c + dirs[i + 1];
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean brightestOpen(LightBridge.LightState s, int r, int c, int[] dirs) {
+        int best = -1;
+        for (int i = 0; i < dirs.length; i += 2) {
+            int nr = r + dirs[i], nc = c + dirs[i + 1];
+            if (open(s, nr, nc) && s.grid[nr][nc] > best) {
+                best = s.grid[nr][nc];
+                selR = nr;
+                selC = nc;
+            }
+        }
+        return best >= 0;
+    }
+
+    private static float tileBits(LightBridge.LightState s, int r, int c) {
+        int code = s.grid[r][c];
+        int cls = CLS_PROP;
+        boolean found;
+        if (isWallPiece(code)) {
+            cls = CLS_WALL;
+            if (code == -2 || code == -3 || code == -5) {
+                if (r + 1 < s.rows && s.grid[r + 1][c] < -19 && s.grid[r + 1][c] != -40) {
+                    return pack(c * Graphics.TILE + Graphics.VIRTUAL_WIDTH / 2 - s.camX,
+                            (r + 1) * Graphics.TILE + Graphics.playAreaH / 2 - s.camY, cls, ALONG_X);
+                }
+                int south = r + 1 < s.rows ? s.grid[r + 1][c] : 0;
+                found = (open(s, r + 1, c) && pick(r + 1, c))
+                        || (((south <= -7 && south >= -11) || south == -19) && pick(r + 1, c))
+                        || (open(s, r, c + 1) && pick(r, c + 1));
+            } else {
+                found = code != -40 && (firstOpen(s, r, c, EAST_THEN_SOUTH)
+                        || (open(s, r + 1, c + 1) && pick(r + 1, c + 1)));
+            }
+        } else if (code == -103 || code == -105) {
+            cls = CLS_WALL;
+            found = firstOpen(s, r, c, SOUTH_THEN_NORTH);
+        } else if (code == -104 || code == -106) {
+            cls = CLS_WALL;
+            found = brightestOpen(s, r, c, EAST_WEST);
+        } else if (code == -12 || code == -14 || code == -16 || code == -100) {
+            found = firstOpen(s, r, c, SOUTH_THEN_NORTH);
+        } else if (code == -13 || code == -15 || code == -17 || code == -101) {
+            found = brightestOpen(s, r, c, EAST_WEST);
+        } else if (code >= -19) {
+            found = open(s, r + 1, c) ? pick(r + 1, c) : brightestOpen(s, r, c, EAST_WEST_NORTH);
+        } else {
+            return pack(c * Graphics.TILE + Graphics.VIRTUAL_WIDTH / 2 - s.camX,
+                    r * Graphics.TILE + Graphics.playAreaH / 2 - s.camY, CLS_LOW, ALONG_BOTH);
+        }
+        int tr = found ? selR : r, tc = found ? selC : c;
+        int along = tr != r && tc == c ? ALONG_X : tc != c && tr == r ? ALONG_Y : FLAT;
+        return pack(tc * Graphics.TILE + Graphics.VIRTUAL_WIDTH / 2 - s.camX,
+                tr * Graphics.TILE + Graphics.playAreaH / 2 - s.camY, cls, along);
+    }
+
+    private static boolean pick(int r, int c) {
+        selR = r;
+        selC = c;
+        return true;
+    }
+
+    private static final int ALONG_BOTH = 0, ALONG_X = 1, FLAT = 2, ALONG_Y = 3;
+
+    private static float pack(int sx, int sy, int cls, int along) {
+        int qx = Math.max(0, Math.min(Graphics.VIRTUAL_WIDTH - 1, sx));
+        int qy = Math.max(0, Math.min(Graphics.VIRTUAL_HEIGHT - 1, sy));
+        return Color.toFloatBits(qx, qy & 255, cls * 32 + (qy >> 8) * 4 + along, 255);
+    }
+
+    static void composite(FrameBuffer target) {
+        if (bands[0] == null || target == null) {
+            return;
+        }
+        compositeInto(target, false);
+        if (Graphics.sceneClassifyDebug) {
+            if (classifyFbo == null) {
+                classifyFbo = new FrameBuffer(Pixmap.Format.RGBA8888, Graphics.FBO_W, Graphics.FBO_H, false);
+                classifyFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            }
+            compositeInto(classifyFbo, true);
+        }
+    }
+
+    static FrameBuffer classify() {
+        return classifyFbo;
+    }
+
+    private static void compositeInto(FrameBuffer dst, boolean debug) {
+        ShaderProgram floorShader = Graphics.sceneLightShader;
+        boolean canLight = lit() && floorShader != null;
+        dst.begin();
+        Gdx.gl.glViewport(0, 0, Graphics.FBO_W, Graphics.FBO_H);
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        Graphics.batch.setProjectionMatrix(Graphics.gameCam.combined);
+        Graphics.batch.setColor(Color.WHITE);
+        Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        for (int i = 0; i < BAND_COUNT; i++) {
+            if (debug && i == OBJECTS && frame != null && Graphics.objectLightShader != null) {
+                Graphics.batch.setShader(Graphics.objectLightShader);
+                Graphics.batch.begin();
+                configureObjectShader(true);
+                drawObjects(frame);
+                Graphics.batch.end();
+                continue;
+            }
+            boolean lit = canLight && FLOOR_LIT[i];
+            Graphics.batch.setShader(lit ? floorShader : null);
+            Graphics.batch.begin();
+            if (lit) {
+                float[] bounce = LightEngine.bounceGain();
+                floorShader.setUniformi("u_light", 1);
+                floorShader.setUniformi("u_bounce", 2);
+                floorShader.setUniformi("u_furniture", 3);
+                floorShader.setUniformf("u_view", Graphics.FBO_H, Graphics.RENDER_SCALE);
+                floorShader.setUniformf("u_screen", Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT);
+                floorShader.setUniformf("u_scroll", LightEngine.scrollX(), LightEngine.scrollY());
+                floorShader.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
+                floorShader.setUniformf("u_mapTiles", LightEngine.mapCols(), LightEngine.mapRows());
+                floorShader.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+                floorShader.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
+                floorShader.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);
+                floorShader.setUniformf("u_debug", debug ? 1f : 0f);
+                LightEngine.lightmap().bind(1);
+                LightEngine.bounce().bind(2);
+                LightEngine.furniture().bind(3);
+                Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
+            }
+            Texture t = bands[i].getColorBufferTexture();
+            Graphics.batch.draw(t, 0, 0, Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT,
+                    0, 0, t.getWidth(), t.getHeight(), false, false);
+            Graphics.batch.end();
+        }
+        Graphics.batch.setShader(null);
+        dst.end();
+    }
+
+    static void dispose() {
+        for (int i = 0; i < BAND_COUNT; i++) {
+            if (bands[i] != null) {
+                bands[i].dispose();
+                bands[i] = null;
+            }
+        }
+        if (classifyFbo != null) {
+            classifyFbo.dispose();
+            classifyFbo = null;
+        }
+    }
+}

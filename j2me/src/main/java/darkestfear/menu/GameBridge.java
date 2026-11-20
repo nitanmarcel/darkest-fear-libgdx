@@ -5,7 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Vector;
 
-final class GameBridge {
+public final class GameBridge {
 
     private static boolean ready;
     private static boolean failed;
@@ -137,7 +137,7 @@ final class GameBridge {
         return currentScreenIs(levelCls);
     }
 
-    static boolean inCutscene() {
+    public static boolean inCutscene() {
         return currentScreenIs(cutsceneCls);
     }
 

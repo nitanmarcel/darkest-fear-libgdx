@@ -2,6 +2,8 @@ package javax.microedition.lcdui;
 
 import com.badlogic.gdx.Input.Keys;
 
+import darkestfear.menu.DebugOverlay;
+import darkestfear.menu.GameBridge;
 import darkestfear.menu.GameControls;
 import darkestfear.menu.MenuOverlay;
 
@@ -51,6 +53,10 @@ public abstract class Canvas extends Displayable {
     public static void renderFrame(Graphics g) {
         MenuOverlay.applyPending();
         Displayable d = Display.current();
+        boolean litScene = !MenuOverlay.active() && !GameBridge.inCutscene();
+        if (litScene) {
+            Graphics.prepareLightmap();
+        }
         g.begin();
         try {
             if (MenuOverlay.active()) {
@@ -60,6 +66,15 @@ public abstract class Canvas extends Displayable {
             }
         } finally {
             g.end();
+        }
+        if (DebugOverlay.gizmosActive() && !MenuOverlay.active()
+                && d instanceof Canvas) {
+            Graphics.beginOverlay();
+            try {
+                DebugOverlay.render(g);
+            } finally {
+                Graphics.endOverlay();
+            }
         }
         Graphics.present();
         if (GameControls.active()) {

@@ -82,12 +82,13 @@ public final class FontRegistry {
             new FreeTypeFontGenerator(Gdx.files.internal(path));
         try {
             FreeTypeFontParameter p = new FreeTypeFontParameter();
-            p.size = pixelHeightFor(size);
+            p.size = pixelHeightFor(size) * Graphics.RENDER_SCALE;
             p.flip = true;
-            p.minFilter = Texture.TextureFilter.Nearest;
-            p.magFilter = Texture.TextureFilter.Nearest;
+            p.minFilter = Texture.TextureFilter.Linear;
+            p.magFilter = Texture.TextureFilter.Linear;
 
             BitmapFont bf = gen.generateFont(p);
+            bf.getData().setScale(1f / Graphics.RENDER_SCALE);
             CREATED.add(bf);
             return bf;
         } finally {

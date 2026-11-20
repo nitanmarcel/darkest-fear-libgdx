@@ -41,6 +41,7 @@ public final class MenuOverlay {
     private static final int ACT_FULLSCREEN = 7;
     private static final int ACT_RESET = 8;
     private static final int ACT_BACK = 9;
+    private static final int ACT_LIGHTING = 11;
 
     private static final int COLOR_BG = 0x0A0A0A;
     private static final int COLOR_TITLE = 0xE0E0E0;
@@ -459,6 +460,9 @@ public final class MenuOverlay {
             case ACT_FULLSCREEN:
                 pendingFullscreen = true;
                 break;
+            case ACT_LIGHTING:
+                Graphics.setLightingEnabled(!Graphics.isLightingEnabled());
+                break;
             case ACT_RESET:
                 GameBridge.openMenu(9);
                 break;
@@ -489,6 +493,7 @@ public final class MenuOverlay {
             if (isDesktop()) {
                 add(ls, as, "Fullscreen: " + (Gdx.graphics.isFullscreen() ? "On" : "Off"), ACT_FULLSCREEN);
             }
+            add(ls, as, "Lighting: " + (Graphics.isLightingEnabled() ? "Enhanced" : "Original"), ACT_LIGHTING);
             add(ls, as, textOr(18, "Reset Game"), ACT_RESET);
             add(ls, as, textOr(13, "Back"), ACT_BACK);
         } else {

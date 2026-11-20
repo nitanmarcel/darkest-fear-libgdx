@@ -75,6 +75,10 @@ public class Image {
         return pixmap;
     }
 
+    boolean isMutable() {
+        return mutable;
+    }
+
     void markDirty() {
         dirty = true;
     }
