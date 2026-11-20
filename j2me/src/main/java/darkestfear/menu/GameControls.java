@@ -195,7 +195,7 @@ public final class GameControls {
         BitmapFont bf = font.getBitmapFont();
         float oldX = bf.getData().scaleX;
         float oldY = bf.getData().scaleY;
-        float scale = Math.max(1f, (Gdx.graphics.getWidth() * 0.05f) / bf.getCapHeight());
+        float scale = (Gdx.graphics.getWidth() * 0.05f) / (bf.getCapHeight() * Graphics.RENDER_SCALE);
 
         Graphics.beginHud();
         try {
@@ -209,6 +209,13 @@ public final class GameControls {
                 g.setColor(COLOR_LABEL);
                 g.drawString(b.label, (int) (b.x + b.w / 2), (int) (b.y + b.h / 2),
                         Graphics.HCENTER | Graphics.VCENTER);
+            }
+            if (touchDevice()) {
+                bf.getData().setScale(scale * 0.5f);
+                g.setColor(COLOR_LABEL);
+                float w = Gdx.graphics.getWidth();
+                g.drawString(Gdx.graphics.getFramesPerSecond() + " FPS", (int) (w * 0.04f), (int) (w * 0.09f),
+                        Graphics.LEFT | Graphics.VCENTER);
             }
         } finally {
             bf.getData().setScale(oldX, oldY);
