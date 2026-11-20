@@ -89,6 +89,7 @@ public final class FontRegistry {
 
             BitmapFont bf = gen.generateFont(p);
             bf.getData().setScale(1f / Graphics.RENDER_SCALE);
+            bf.setUseIntegerPositions(false);
             CREATED.add(bf);
             return bf;
         } finally {

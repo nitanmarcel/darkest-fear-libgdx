@@ -9,6 +9,12 @@ public final class LightBridge {
     private static boolean failed;
 
     private static Class<?> levelCls;
+    private static Field fPausedScreen;
+    private static Field fHealth, fHealthMax, fKeys, fSaved, fToSave, fObjective, fLampSprites, fMirrorSprites;
+    private static Field fTileRenderer;
+    private static Field fTileBuffer;
+    private static Method mLevelRender;
+    private static Method mDrawTileLayer;
     private static Method mGetCurrentScreen;
     private static Field fGrid;
     private static Field fCamera;
@@ -218,6 +224,9 @@ public final class LightBridge {
         }
         fDirty.setBoolean(level, true);
         forceRebake--;
+        if (level == pausedLevel()) {
+            repaintFloor(level);
+        }
     }
 
     static synchronized void init() {
@@ -246,6 +255,14 @@ public final class LightBridge {
             fPlates = fieldOrNull("b", byte[][].class);
             fTriggers = fieldOrNull("d", byte[][].class);
             fCarried = fieldOrNull("k", byte.class);
+            fHealth = fieldOrNull("A", byte.class);
+            fHealthMax = fieldOrNull("z", byte.class);
+            fKeys = fieldOrNull("E", byte.class);
+            fSaved = fieldOrNull("H", byte.class);
+            fToSave = fieldOrNull("G", byte.class);
+            fObjective = fieldOrNull("v", int.class);
+            fLampSprites = fieldOrNull("f", int[].class);
+            fMirrorSprites = fieldOrNull("b", int[].class);
             fFearTime = fieldOrNull("e", int.class);
             fFearLimit = fieldOrNull("f", int.class);
             fInterCount = fieldOrNull("h", byte.class);
@@ -257,6 +274,7 @@ public final class LightBridge {
             }
             fLevelIndex = fieldOrNull("D", byte.class);
             resolveSpriteAttrs(cl);
+            resolvePaused(cl, screenCls);
             resolvePlayer();
             ready = true;
         } catch (Throwable t) {
@@ -275,9 +293,81 @@ public final class LightBridge {
         }
         try {
             Object s = mGetCurrentScreen.invoke(null);
+            if (s != null && levelCls.isInstance(s)) {
+                return s;
+            }
+            if (MenuOverlay.showsGame()) {
+                return pausedLevel();
+            }
+            return GameBridge.popupLevel();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static final int NO_OBJECTIVE = -666;
+    private static final int LANTERN_SPRITE = 12;
+
+    static int[] hud() {
+        Object level = currentLevel();
+        if (level == null || fHealth == null || fHealthMax == null || fKeys == null || fSaved == null
+                || fToSave == null) {
+            return null;
+        }
+        try {
+            int objective = fObjective == null ? NO_OBJECTIVE : fObjective.getInt(level);
+            int carried = fCarried == null ? -1 : fCarried.getByte(level);
+            int sprite = -1;
+            byte[][] lights = (byte[][]) fEntities.get(level);
+            if (carried >= 0 && lights != null && lights.length >= 6 && carried < lights[5].length) {
+                int type = lights[5][carried], facing = lights[3][carried];
+                int[] table = type == 1 ? (int[]) fLampSprites.get(null) : type == 2 ? (int[]) fMirrorSprites.get(null) : null;
+                sprite = type == 0 ? LANTERN_SPRITE : table != null && facing >= 0 && facing < table.length ? table[facing] : -1;
+            }
+            return new int[] {fHealth.getByte(level), fHealthMax.getByte(level), fKeys.getByte(level),
+                    fSaved.getByte(level), fToSave.getByte(level), objective == NO_OBJECTIVE ? -1 : objective, sprite};
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    static Object pausedLevel() {
+        if (!available() || fPausedScreen == null || !GameBridge.canContinue()) {
+            return null;
+        }
+        try {
+            Object s = fPausedScreen.get(null);
             return s != null && levelCls.isInstance(s) ? s : null;
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    public static void renderPausedLevel(javax.microedition.lcdui.Graphics g) {
+        renderLevel(pausedLevel(), g);
+    }
+
+    public static void renderLevel(Object level, javax.microedition.lcdui.Graphics g) {
+        if (level == null || mLevelRender == null) {
+            return;
+        }
+        try {
+            g.setClip(0, 0, javax.microedition.lcdui.Graphics.VIRTUAL_WIDTH, javax.microedition.lcdui.Graphics.VIRTUAL_HEIGHT);
+            mLevelRender.invoke(level, g);
+        } catch (Throwable t) {
+        }
+    }
+
+    private static void repaintFloor(Object level) {
+        if (fTileRenderer == null || fTileBuffer == null || mDrawTileLayer == null) {
+            return;
+        }
+        try {
+            int[] cam = (int[]) fCamera.get(level);
+            int halfW = javax.microedition.lcdui.Graphics.VIRTUAL_WIDTH / 2, halfH = fPlayH.getInt(null) / 2;
+            mDrawTileLayer.invoke(fTileRenderer.get(null), fTileBuffer.get(null),
+                    cam[0] - halfW, cam[1] - halfH, cam[0] + halfW - 1, cam[1] + halfH - 1, true);
+        } catch (Throwable t) {
         }
     }
 
@@ -336,6 +426,37 @@ public final class LightBridge {
                     ents, entCount, playerRow, playerCol, footprints, interactables);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    private static void resolvePaused(ClassLoader cl, Class<?> screenCls) {
+        try {
+            Class<?> tileCls = Class.forName("c", false, cl);
+            Class<?> bufferCls = javax.microedition.lcdui.Graphics.class;
+            for (Field f : Class.forName("q", false, cl).getDeclaredFields()) {
+                if (f.getType() == screenCls && java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                    f.setAccessible(true);
+                    fPausedScreen = f;
+                }
+            }
+            for (Field f : levelCls.getDeclaredFields()) {
+                if (f.getType() == tileCls && java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                    f.setAccessible(true);
+                    fTileRenderer = f;
+                }
+            }
+            for (Field f : tileCls.getDeclaredFields()) {
+                if (f.getType() == bufferCls && java.lang.reflect.Modifier.isStatic(f.getModifiers())) {
+                    f.setAccessible(true);
+                    fTileBuffer = f;
+                }
+            }
+            mLevelRender = levelCls.getDeclaredMethod("a", javax.microedition.lcdui.Graphics.class);
+            mLevelRender.setAccessible(true);
+            mDrawTileLayer = tileCls.getDeclaredMethod("a", bufferCls, int.class, int.class, int.class, int.class, boolean.class);
+            mDrawTileLayer.setAccessible(true);
+        } catch (Throwable t) {
+            fPausedScreen = null;
         }
     }
 

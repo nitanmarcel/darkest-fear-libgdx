@@ -37,6 +37,11 @@ public final class GameBridge {
     private static Field fItemOptions;
     private static Field fItemIndex;
     private static Field fItemEnabled;
+    private static Field fItemType;
+    private static Field fPopupUnder;
+    private static Field fPopupBlocks;
+    private static Field fTextIcons;
+    private static Field fCaptionTop, fCaptionShown, fCaptionTexts, fCaptionIndex;
     private static Field fTextLines;
     private static Field fTextFont;
     private static Field fTextHeight;
@@ -89,6 +94,20 @@ public final class GameBridge {
             fItemOptions = findArrayField(itemCls, "a", textCls);
             fItemIndex = findField(itemCls, "a", int.class);
             fItemEnabled = findField(itemCls, "a", boolean.class);
+            fItemType = findField(itemCls, "a", byte.class);
+            fPopupUnder = findField(popupCls, "a", screenCls);
+            fPopupBlocks = findArrayField(popupCls, "a", textCls);
+            fTextIcons = findField(textCls, "a", int[].class);
+            fPopupUnder.setAccessible(true);
+            fPopupBlocks.setAccessible(true);
+            fTextIcons.setAccessible(true);
+            fCaptionTop = findField(cutsceneCls, "e", int.class);
+            fCaptionShown = findField(cutsceneCls, "d", boolean.class);
+            fCaptionTexts = findField(cutsceneCls, "n", int[].class);
+            fCaptionIndex = findField(cutsceneCls, "w", int.class);
+            for (Field f : new Field[]{fCaptionTop, fCaptionShown, fCaptionTexts, fCaptionIndex}) {
+                f.setAccessible(true);
+            }
             fTextLines = findField(textCls, "a", String[].class);
             fTextFont = findField(textCls, "a", javax.microedition.lcdui.Font.class);
             fTextHeight = textCls.getDeclaredField("e");
@@ -102,7 +121,7 @@ public final class GameBridge {
                 m.setAccessible(true);
             }
             for (Field f : new Field[]{fMenuId, fCanContinue, fSoundEnabled, fMenuItems, fMenuTitle,
-                    fMenuSelected, fMenuSoftLabels, fItemOptions, fItemIndex, fItemEnabled, fTextLines,
+                    fMenuSelected, fMenuSoftLabels, fItemOptions, fItemIndex, fItemEnabled, fItemType, fTextLines,
                     fTextFont, fTextHeight, fMenuScroll, fMenuViewTop, fMenuViewHeight,
                     fMenuTitleTop}) {
                 f.setAccessible(true);
@@ -143,6 +162,70 @@ public final class GameBridge {
 
     static boolean inPopup() {
         return currentScreenIs(popupCls);
+    }
+
+    public static Object popupLevel() {
+        if (!available()) {
+            return null;
+        }
+        try {
+            Object screen = mGetCurrentScreen.invoke(null);
+            if (screen == null || !popupCls.isInstance(screen)) {
+                return null;
+            }
+            Object under = fPopupUnder.get(screen);
+            return under != null && levelCls.isInstance(under) ? under : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    static String[] popupLines() {
+        try {
+            Object[] blocks = (Object[]) fPopupBlocks.get(mGetCurrentScreen.invoke(null));
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (Object block : blocks) {
+                String[] lines = (String[]) fTextLines.get(block);
+                if (lines != null) {
+                    out.addAll(java.util.Arrays.asList(lines));
+                }
+            }
+            return out.toArray(new String[0]);
+        } catch (Throwable t) {
+            return EMPTY;
+        }
+    }
+
+    static int popupPortrait() {
+        try {
+            Object[] blocks = (Object[]) fPopupBlocks.get(mGetCurrentScreen.invoke(null));
+            int[] icons = blocks.length > 0 ? (int[]) fTextIcons.get(blocks[0]) : null;
+            return icons != null && icons.length > 0 ? icons[0] : -1;
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    static int captionTop() {
+        try {
+            return fCaptionTop.getInt(mGetCurrentScreen.invoke(null));
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    static String caption() {
+        try {
+            Object scene = mGetCurrentScreen.invoke(null);
+            if (!fCaptionShown.getBoolean(scene)) {
+                return null;
+            }
+            int[] texts = (int[]) fCaptionTexts.get(scene);
+            int index = fCaptionIndex.getInt(scene);
+            return texts != null && index >= 0 && index < texts.length ? text(texts[index]) : null;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     static boolean pendingCutscene() {
@@ -320,6 +403,23 @@ public final class GameBridge {
             return fItemEnabled.getBoolean(item);
         } catch (Throwable t) {
             return true;
+        }
+    }
+
+    static int menuItemType(Object menu, int index) {
+        try {
+            Object item = ((Vector<?>) fMenuItems.get(menu)).elementAt(index);
+            return fItemType.getByte(item);
+        } catch (Throwable t) {
+            return 1;
+        }
+    }
+
+    static void setMenuView(Object menu, int top, int height) {
+        try {
+            fMenuViewTop.setInt(menu, top);
+            fMenuViewHeight.setInt(menu, height);
+        } catch (Throwable t) {
         }
     }
 

@@ -52,17 +52,32 @@ public abstract class Canvas extends Displayable {
 
     public static void renderFrame(Graphics g) {
         MenuOverlay.applyPending();
+        MenuOverlay.keepSplash();
         Displayable d = Display.current();
-        boolean litScene = !MenuOverlay.active() && !GameBridge.inCutscene();
+        boolean preview = MenuOverlay.showsGame();
+        Object boxed = GameBridge.popupLevel();
+        boolean litScene = (preview || !MenuOverlay.active()) && !GameBridge.inCutscene();
         if (litScene) {
             Graphics.prepareLightmap();
         }
         g.begin();
         try {
             if (MenuOverlay.active()) {
+                if (preview) {
+                    darkestfear.menu.LightBridge.renderPausedLevel(g);
+                }
                 MenuOverlay.render(g);
+            } else if (boxed != null) {
+                darkestfear.menu.LightBridge.renderLevel(boxed, g);
+                darkestfear.menu.GameHud.renderBox(g);
             } else if (d instanceof Canvas) {
-                ((Canvas) d).paint(g);
+                Graphics.textMuted = GameBridge.inCutscene();
+                try {
+                    ((Canvas) d).paint(g);
+                } finally {
+                    Graphics.textMuted = false;
+                }
+                darkestfear.menu.GameHud.renderLevel(g);
             }
         } finally {
             g.end();
@@ -110,7 +125,7 @@ public abstract class Canvas extends Displayable {
             MenuOverlay.tap(screenX, screenY);
             return true;
         }
-        return false;
+        return darkestfear.menu.GameHud.tap(screenX, screenY);
     }
 
     public static boolean dispatchPan(float screenDeltaY) {

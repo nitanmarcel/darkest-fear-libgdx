@@ -14,7 +14,7 @@ public final class DebugBuffers {
     private static final String[] NAMES = {
             "Distance Field", "Light", "Bounce", "Grid", "Scene",
             "Band: Floor", "Band: Decal", "Band: Objects", "Band: Actors", "Band: Overhang", "Band: FX",
-            "Band: HUD", "Lighting Classify"
+            "Lighting Classify"
     };
 
     public static int classifyIndex() {
@@ -54,8 +54,7 @@ public final class DebugBuffers {
             case 8: return SceneCompositor.band(SceneCompositor.ACTORS);
             case 9: return SceneCompositor.band(SceneCompositor.OVERHANG);
             case 10: return SceneCompositor.band(SceneCompositor.FX);
-            case 11: return SceneCompositor.band(SceneCompositor.HUD);
-            case 12: return SceneCompositor.classify();
+            case 11: return SceneCompositor.classify();
             default: return LightEngine.debugFbo(which);
         }
     }

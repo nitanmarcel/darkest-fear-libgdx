@@ -15,12 +15,11 @@ final class SceneCompositor {
     private SceneCompositor() {
     }
 
-    static final int FLOOR = 0, DECAL = 1, OBJECTS = 2, ACTORS = 3, OVERHANG = 4, FX = 5, HUD = 6;
-    private static final int BAND_COUNT = 7;
+    static final int FLOOR = 0, DECAL = 1, OBJECTS = 2, ACTORS = 3, OVERHANG = 4, FX = 5;
+    private static final int BAND_COUNT = 6;
 
-    private static final boolean[] PERSIST = {false, false, false, false, false, false, true};
-    private static final boolean[] FLOOR_LIT = {true, true, false, false, false, false, false};
-    private static final boolean[] PER_SPRITE = {false, false, true, true, true, false, false};
+    private static final boolean[] FLOOR_LIT = {true, true, false, false, false, false};
+    private static final boolean[] PER_SPRITE = {false, false, true, true, true, false};
 
     private static final int CLS_WALL = 1, CLS_PROP = 2, CLS_ACTOR = 3, CLS_LOW = 4, CLS_PLAYER = 5;
 
@@ -104,9 +103,6 @@ final class SceneCompositor {
     static void begin() {
         ensure();
         for (int i = 0; i < BAND_COUNT; i++) {
-            if (PERSIST[i]) {
-                continue;
-            }
             bands[i].begin();
             Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
             Gdx.gl.glClearColor(0f, 0f, 0f, 0f);
@@ -718,10 +714,7 @@ final class SceneCompositor {
         Graphics.batch.setColor(Color.WHITE);
         Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = 0; i < BAND_COUNT; i++) {
-            if (i == HUD && Graphics.hudHidden()) {
-                continue;
-            }
-            if (i == HUD && !debug && dangerAmount > 0f && frame != null) {
+            if (i == FX && !debug && dangerAmount > 0f && frame != null) {
                 drawVignette();
             }
             if (debug && i == OBJECTS && frame != null && Graphics.objectLightShader != null) {

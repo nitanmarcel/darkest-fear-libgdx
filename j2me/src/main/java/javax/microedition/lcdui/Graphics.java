@@ -23,6 +23,7 @@ public class Graphics {
     public static final int FBO_W = VIRTUAL_WIDTH * RENDER_SCALE;
     public static final int FBO_H = VIRTUAL_HEIGHT * RENDER_SCALE;
 
+    public static final int DIMMED = 0x100;
     public static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
 
     static SpriteBatch batch;
@@ -34,6 +35,8 @@ public class Graphics {
     private static boolean gameTargetActive;
 
     static int playAreaH = VIRTUAL_HEIGHT;
+    private static boolean flatFrame;
+    static boolean textMuted;
 
     static ShaderProgram sceneLightShader;
     static ShaderProgram objectLightShader;
@@ -165,6 +168,7 @@ public class Graphics {
             playAreaH = ph;
         }
         darkestfear.menu.LightBridge.normalizeIdlePlayerColumn();
+        flatFrame = darkestfear.menu.GameBridge.inCutscene();
         gameTargetActive = true;
         SceneCompositor.begin();
     }
@@ -174,14 +178,6 @@ public class Graphics {
         gameTargetActive = false;
         SceneCompositor.end();
         SceneCompositor.composite(gameFbo);
-    }
-
-    static boolean hudHidden() {
-        return darkestfear.menu.MenuOverlay.active() || darkestfear.menu.GameBridge.inCutscene();
-    }
-
-    private static int overlayBand(int y) {
-        return y >= playAreaH && !hudHidden() ? SceneCompositor.HUD : SceneCompositor.FX;
     }
 
     public static void beginOverlay() {
@@ -278,7 +274,6 @@ public class Graphics {
     public static void present() {
         if (gameFbo == null) return;
 
-        boolean menu = hudHidden();
 
         Texture tex = gameFbo.getColorBufferTexture();
 
@@ -313,7 +308,7 @@ public class Graphics {
             pixmap.fillRectangle(cx, cy, cw, ch);
             target.markDirty();
         } else {
-            SceneCompositor.setBand(overlayBand(y));
+            SceneCompositor.setBand(SceneCompositor.FX);
             batch.draw(white, x, y, width, height);
         }
     }
@@ -332,7 +327,7 @@ public class Graphics {
             pixmap.drawLine(x1, y1, x2, y2);
             target.markDirty();
         } else {
-            SceneCompositor.setBand(overlayBand(Math.min(y1, y2)));
+            SceneCompositor.setBand(SceneCompositor.FX);
             float dx = x2 - x1, dy = y2 - y1;
             float len = (float) Math.sqrt(dx * dx + dy * dy);
             float ang = (float) Math.toDegrees(Math.atan2(dy, dx));
@@ -357,8 +352,8 @@ public class Graphics {
             SceneCompositor.setBand(SceneCompositor.FLOOR);
             batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
         } else {
-            if (clipY >= playAreaH) {
-                SceneCompositor.setBand(overlayBand(clipY));
+            if (flatFrame || clipY >= playAreaH) {
+                SceneCompositor.setBand(SceneCompositor.FX);
             } else {
                 SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
             }
@@ -374,15 +369,31 @@ public class Graphics {
         }
     }
 
+    public void drawRegion(Image src, int xSrc, int ySrc, int width, int height, int transform,
+                           int xDest, int yDest, int anchor) {
+        int x = anchorX(xDest, width, anchor), y = anchorY(yDest, height, anchor);
+        if (target != null) {
+            pixmap.setBlending(Pixmap.Blending.SourceOver);
+            pixmap.drawPixmap(src.pixmap(), x, y, xSrc, ySrc, width, height);
+            target.markDirty();
+            return;
+        }
+        SceneCompositor.setBand(SceneCompositor.FX);
+        float shade = transform == DIMMED ? 0.28f : 1f;
+        batch.setColor(shade, shade, shade, 1f);
+        batch.draw(src.texture(), x, y, width, height, xSrc, ySrc, width, height, false, true);
+        batch.setColor(color);
+    }
+
     public void drawString(String str, int x, int y, int anchor) {
-        if (target != null || font == null || str == null || str.isEmpty()) return;
+        if (textMuted || target != null || font == null || str == null || str.isEmpty()) return;
         try {
             layout.setText(font, str);
             x = anchorX(x, (int) layout.width, anchor);
             if ((anchor & BOTTOM) != 0)       y -= (int) layout.height;
             else if ((anchor & VCENTER) != 0) y -= (int) layout.height / 2;
             font.setColor(color);
-            SceneCompositor.setBand(overlayBand(y));
+            SceneCompositor.setBand(SceneCompositor.FX);
             font.draw(batch, str, x, y);
         } catch (ArrayIndexOutOfBoundsException ignored) {
         }

@@ -23,8 +23,7 @@ public final class MenuOverlay {
             + "Move - Arrow keys or 2,4,6,8\n"
             + "Interact / pick up - Enter or Space\n"
             + "Pause - Q\n"
-            + "Soft keys - Q (confirm), E (back)\n"
-            + "Menus - mouse, arrows, Enter\n"
+            + "Menus - mouse, arrows, Enter to choose, Esc to go back\n"
             + "\n"
             + "Thomas is able to - open windows, light fireplaces, carry light sources, "
             + "carry mirrors, move boxes, open doors and interact with other characters.";
@@ -37,29 +36,19 @@ public final class MenuOverlay {
     private static final int ACT_HELP = 3;
     private static final int ACT_ABOUT = 4;
     private static final int ACT_EXIT = 5;
-    private static final int ACT_SOUND = 6;
-    private static final int ACT_FULLSCREEN = 7;
-    private static final int ACT_RESET = 8;
-    private static final int ACT_BACK = 9;
-    private static final int ACT_LIGHTING = 11;
-    private static final int ACT_CUES = 12;
-    private static final int ACT_UPSCALE = 13;
 
-    private static final int COLOR_BG = 0x0A0A0A;
-    private static final int COLOR_TITLE = 0xE0E0E0;
-    private static final int COLOR_ITEM = 0x9A9A9A;
-    private static final int COLOR_SELECTED = 0xFFFFFF;
-    private static final int COLOR_DISABLED = 0x555555;
-    private static final int COLOR_BAR = 0x4A0000;
-    private static final int COLOR_SOFTKEY = 0xC08080;
-    private static final int COLOR_SHADOW = 0x000000;
-
-    private static final int W = Graphics.VIRTUAL_WIDTH;
-    private static final int H = Graphics.VIRTUAL_HEIGHT;
-    private static final int LIST_X = 16;
-    private static final int LIST_W = W - 32;
-    private static final int TITLE_Y = 44;
-    private static final int SOFTKEY_Y = H - 22;
+    private static final int W = MenuTheme.W;
+    private static final int H = MenuTheme.H;
+    private static final int LIST_X = MenuTheme.MARGIN;
+    private static final int LIST_W = W - 2 * MenuTheme.MARGIN;
+    private static final int VIEW_BOTTOM = H - 8;
+    private static final int CARD_X = 20;
+    private static final int CARD_PAD = 12;
+    private static final int BUTTON_H = 26;
+    private static final int LINE_STEP = 15;
+    private static final int TITLE_ART = 0x9A;
+    private static final int SPLASH_ART = 147;
+    private static final int TITLE_ART_Y = 240;
 
     private static volatile String[] labels = new String[0];
     private static volatile int[] actions = new int[0];
@@ -72,6 +61,8 @@ public final class MenuOverlay {
     private static int mirrorCount;
 
     private static volatile boolean pendingFullscreen;
+    private static javax.microedition.lcdui.Image splashImage;
+    private static short[] splashAttr;
     private static int windowedWidth = 800;
     private static int windowedHeight = 600;
 
@@ -84,6 +75,22 @@ public final class MenuOverlay {
 
     private static boolean isCustom(int menuId) {
         return menuId == MENU_MAIN || menuId == MENU_SETTINGS;
+    }
+
+    public static boolean showsGame() {
+        return GameBridge.currentMenuId() == MENU_SETTINGS && LightBridge.pausedLevel() != null;
+    }
+
+    public static void keepSplash() {
+        if (splashAttr != null) {
+            return;
+        }
+        short[] attr = LightBridge.spriteAttr(SPLASH_ART);
+        Object sheet = LightBridge.spriteImage(SPLASH_ART);
+        if (attr != null && sheet instanceof javax.microedition.lcdui.Image) {
+            splashImage = (javax.microedition.lcdui.Image) sheet;
+            splashAttr = attr.clone();
+        }
     }
 
     public static boolean consumesInput() {
@@ -113,13 +120,18 @@ public final class MenuOverlay {
         if (menuId != lastMenuId) {
             lastMenuId = menuId;
             selected = 0;
+            cardFocus = 0;
+            SettingsMenu.opened();
         }
 
+        int top = showsGame() ? SettingsMenu.PANEL_TOP : 0;
         g.setClip(0, 0, W, H);
-        g.setColor(COLOR_BG);
-        g.fillRect(0, 0, W, H);
+        g.setColor(MenuTheme.COLOR_BG);
+        g.fillRect(0, top, W, H - top);
 
-        if (isCustom(menuId)) {
+        if (menuId == MENU_SETTINGS) {
+            SettingsMenu.render(g, top);
+        } else if (isCustom(menuId)) {
             renderCustom(g, menuId);
         } else {
             renderMirror(g, menu, menuId);
@@ -128,6 +140,10 @@ public final class MenuOverlay {
 
     public static void scroll(int amountY) {
         Object menu = GameBridge.currentMenu();
+        if (menu != null && GameBridge.currentMenuId() == MENU_SETTINGS) {
+            SettingsMenu.scroll(amountY);
+            return;
+        }
         if (menu == null || isCustom(GameBridge.currentMenuId())) {
             return;
         }
@@ -136,9 +152,43 @@ public final class MenuOverlay {
         GameBridge.setMenuScroll(menu, target);
     }
 
+    private static boolean mirrorKey(int code) {
+        if (cardButtonY >= 0) {
+            switch (code) {
+                case Keys.LEFT:
+                case Keys.RIGHT:
+                case Keys.A:
+                case Keys.D:
+                case Keys.TAB:
+                    cardFocus = 1 - cardFocus;
+                    return true;
+                case -5:
+                case Keys.ENTER:
+                case Keys.SPACE:
+                    Canvas.dispatchKeyPressed(cardFocus == 0 ? -6 : -7);
+                    return true;
+                case Keys.ESCAPE:
+                    Canvas.dispatchKeyPressed(-7);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        if (code == Keys.ESCAPE) {
+            if (mirrorBack) {
+                Canvas.dispatchKeyPressed(-7);
+            }
+            return true;
+        }
+        return false;
+    }
+
     public static boolean keyPressed(int code) {
         if (!isCustom(GameBridge.currentMenuId())) {
-            return false;
+            return mirrorKey(code);
+        }
+        if (GameBridge.currentMenuId() == MENU_SETTINGS) {
+            return SettingsMenu.keyPressed(code);
         }
         int n = labels.length;
         if (n == 0) {
@@ -168,32 +218,42 @@ public final class MenuOverlay {
         }
     }
 
-    private static Font font() {
-        return Font.getFont(Font.FACE_PROPORTIONAL, Font.STYLE_BOLD, Font.SIZE_MEDIUM);
-    }
-
     private static void renderCustom(Graphics g, int menuId) {
         build(menuId);
         String[] items = labels;
 
-        Font font = font();
+        short[] splash = splashAttr;
+        Object splashSheet = splashImage;
+        boolean poster = splash != null;
+        if (poster) {
+            g.setColor(0);
+            g.fillRect(0, 0, W, H);
+            g.drawRegion((javax.microedition.lcdui.Image) splashSheet, splash[0], splash[1], splash[2], splash[3], 0,
+                    (W - splash[2]) / 2, 0, Graphics.TOP | Graphics.LEFT);
+            rowHeight = Math.min(MenuTheme.ROW_H, (H - splash[3] - 2) / Math.max(1, items.length));
+            rowTop = splash[3] + 1;
+        } else {
+            MenuTheme.header(g, textOr(1, "Darkest Fear"), false);
+            short[] art = LightBridge.spriteAttr(TITLE_ART);
+            Object sheet = LightBridge.spriteImage(TITLE_ART);
+            if (art != null && sheet instanceof javax.microedition.lcdui.Image) {
+                g.drawRegion((javax.microedition.lcdui.Image) sheet, art[0], art[1], art[2], art[3], 0,
+                        W / 2 - art[4], TITLE_ART_Y - art[5], Graphics.TOP | Graphics.LEFT);
+            }
+            rowHeight = MenuTheme.ROW_H;
+            rowTop = MenuTheme.LIST_TOP;
+        }
+        Font font = MenuTheme.bold();
         g.setFont(font);
-        rowHeight = font.getHeight() + 12;
-        int blockHeight = items.length * rowHeight;
-        rowTop = Math.max(84, (H - blockHeight) / 2 + 16);
-
-        String title = menuId == MENU_SETTINGS ? textOr(4, "Settings") : textOr(1, "Darkest Fear");
-        drawShadowed(g, title, W / 2, TITLE_Y, COLOR_TITLE);
-
         customCount = items.length;
-
+        int pad = (rowHeight - font.getHeight()) / 2 + MenuTheme.TEXT_DROP;
         for (int i = 0; i < items.length; i++) {
             int y = rowTop + i * rowHeight;
             if (i == selected) {
-                g.setColor(COLOR_BAR);
-                g.fillRect(LIST_X, y, LIST_W, rowHeight);
+                MenuTheme.selectionBar(g, y, rowHeight);
             }
-            drawShadowed(g, items[i], W / 2, y + 6, i == selected ? COLOR_SELECTED : COLOR_ITEM);
+            g.setColor(i == selected ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_ITEM);
+            g.drawString(items[i], MenuTheme.TEXT_X + 2, y + pad, Graphics.TOP | Graphics.LEFT);
         }
     }
 
@@ -203,51 +263,58 @@ public final class MenuOverlay {
     private static int mirrorListTop;
     private static int mirrorAvail;
     private static int mirrorTotal;
+    private static int cardButtonY = -1;
+    private static int cardFocus;
+    private static boolean mirrorBack;
 
     private static final int SCROLL_STEP = 24;
 
     private static void renderMirror(Graphics g, Object menu, int menuId) {
         int count = GameBridge.menuItemCount(menu);
-        int sel = GameBridge.menuSelected(menu);
-
-        g.setFont(font());
         String title = GameBridge.menuTitle(menu);
-        if (title != null && !title.isEmpty()) {
-            drawShadowed(g, title, W / 2, GameBridge.menuTitleTop(menu) + 3, COLOR_TITLE);
+        String left = GameBridge.menuSoftLabel(menu, 0);
+        String right = GameBridge.menuSoftLabel(menu, 1);
+        Font plain = MenuTheme.plain();
+        Font bold = MenuTheme.bold();
+
+        boolean textOnly = true;
+        String[][] lines = new String[count][];
+        int textLines = 0;
+        for (int i = 0; i < count; i++) {
+            boolean selectable = GameBridge.menuItemType(menu, i) != 0;
+            textOnly &= !selectable;
+            lines[i] = menuId == MENU_HELP && i == 0 ? helpLines(plain)
+                    : selectable ? GameBridge.menuItemLines(menu, i) : wrapText(plain, join(GameBridge.menuItemLines(menu, i)), W - 2 * MenuTheme.TEXT_X);
+            textLines += lines[i].length;
+        }
+        boolean question = textOnly && left != null && !left.isEmpty() && right != null && !right.isEmpty();
+        cardButtonY = -1;
+        mirrorCount = 0;
+        if (question && textLines <= 9) {
+            renderCard(g, title, lines, left, right);
+            return;
         }
 
-        String[][] lines = new String[count][];
-        Font[] fonts = new Font[count];
-        int[] lineSteps = new int[count];
-        int[] topPads = new int[count];
+        mirrorBack = right != null && !right.isEmpty();
+        MenuTheme.header(g, title == null ? "" : title, mirrorBack);
+        int listTop = MenuTheme.LIST_TOP;
+        int avail = VIEW_BOTTOM - listTop;
+        GameBridge.setMenuView(menu, listTop, avail);
+
         int[] heights = new int[count];
         int[] tops = new int[count];
         int total = 0;
         for (int i = 0; i < count; i++) {
-            if (menuId == MENU_HELP && i == 0) {
-                fonts[i] = Font.getFont(Font.FACE_PROPORTIONAL, Font.STYLE_PLAIN, Font.SIZE_SMALL);
-                lines[i] = helpLines(fonts[i]);
-                lineSteps[i] = fonts[i].getHeight() + 2;
-                topPads[i] = 4;
-                heights[i] = Math.max(1, lines[i].length) * lineSteps[i] + 8;
-            } else {
-                lines[i] = GameBridge.menuItemLines(menu, i);
-                Font f = GameBridge.menuItemFont(menu, i);
-                fonts[i] = f != null ? f : font();
-                lineSteps[i] = fonts[i].getHeight();
-                topPads[i] = 2;
-                heights[i] = GameBridge.menuItemHeight(menu, i);
-                if (heights[i] <= 0) {
-                    heights[i] = Math.max(1, lines[i].length) * lineSteps[i] + 4;
-                }
+            boolean selectable = GameBridge.menuItemType(menu, i) != 0;
+            heights[i] = selectable ? GameBridge.menuItemHeight(menu, i) : Math.max(1, lines[i].length) * LINE_STEP + 4;
+            if (heights[i] <= 0) {
+                heights[i] = MenuTheme.ROW_H;
             }
             tops[i] = total;
             total += heights[i] + 2;
         }
-
-        int listTop = GameBridge.menuViewTop(menu);
-        int avail = GameBridge.menuViewHeight(menu);
-        int scrollY = GameBridge.menuScroll(menu);
+        int scrollY = Math.max(0, Math.min(GameBridge.menuScroll(menu), Math.max(0, total - avail)));
+        int sel = GameBridge.menuSelected(menu);
 
         mirrorTops = tops;
         mirrorHeights = heights;
@@ -255,6 +322,7 @@ public final class MenuOverlay {
         mirrorListTop = listTop;
         mirrorAvail = avail;
         mirrorTotal = total;
+        mirrorCount = textOnly ? 0 : count;
 
         g.setClip(0, listTop, W, avail);
         for (int i = 0; i < count; i++) {
@@ -262,44 +330,118 @@ public final class MenuOverlay {
             if (y + heights[i] < listTop || y > listTop + avail) {
                 continue;
             }
-            boolean enabled = GameBridge.menuItemEnabled(menu, i);
-            if (i == sel) {
-                g.setColor(COLOR_BAR);
-                g.fillRect(LIST_X, y, LIST_W, heights[i]);
+            if (GameBridge.menuItemType(menu, i) == 0) {
+                g.setFont(plain);
+                g.setColor(MenuTheme.COLOR_TEXT);
+                for (int k = 0; k < lines[i].length; k++) {
+                    g.drawString(lines[i][k], MenuTheme.TEXT_X, y + 2 + k * LINE_STEP, Graphics.TOP | Graphics.LEFT);
+                }
+                continue;
             }
-            int color = !enabled ? COLOR_DISABLED : (i == sel ? COLOR_SELECTED : COLOR_ITEM);
-            g.setFont(fonts[i]);
-            String[] ls = lines[i];
-            for (int k = 0; k < ls.length; k++) {
-                drawShadowed(g, ls[k], W / 2, y + topPads[i] + k * lineSteps[i], color);
+            boolean enabled = GameBridge.menuItemEnabled(menu, i);
+            boolean on = i == sel;
+            if (on) {
+                MenuTheme.selectionBar(g, y, heights[i]);
+            }
+            String label = lines[i].length > 0 ? lines[i][0] : "";
+            String value = null;
+            int gap = label.indexOf("   ");
+            if (gap > 0 && lines[i].length == 1) {
+                value = label.substring(gap).trim();
+                label = label.substring(0, gap);
+            }
+            int color = !enabled ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_ITEM;
+            int pad = (heights[i] - lines[i].length * bold.getHeight()) / 2 + MenuTheme.TEXT_DROP;
+            g.setFont(bold);
+            g.setColor(color);
+            g.drawString(label, MenuTheme.TEXT_X + 2, y + pad, Graphics.TOP | Graphics.LEFT);
+            for (int k = 1; k < lines[i].length; k++) {
+                g.drawString(lines[i][k], MenuTheme.TEXT_X + 2, y + pad + k * bold.getHeight(), Graphics.TOP | Graphics.LEFT);
+            }
+            if (value != null) {
+                g.setFont(on ? bold : plain);
+                g.setColor(!enabled ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_VALUE);
+                g.drawString(value, W - MenuTheme.TEXT_X, y + pad, Graphics.TOP | Graphics.RIGHT);
             }
         }
         g.setClip(0, 0, W, H);
 
-        if (scrollY > 0) {
-            drawArrow(g, W / 2, listTop - 8, true, COLOR_SOFTKEY);
+        MenuTheme.scrollBar(g, listTop, avail, scrollY, total);
+    }
+
+    private static void renderCard(Graphics g, String title, String[][] lines, String left, String right) {
+        Font titleFont = MenuTheme.titleFont();
+        Font plain = MenuTheme.plain();
+        Font bold = MenuTheme.bold();
+        int inner = W - 2 * CARD_X - 2 * CARD_PAD;
+        int textLines = 0;
+        for (int i = 0; i < lines.length; i++) {
+            lines[i] = wrapText(plain, join(lines[i]), inner);
+            textLines += lines[i].length;
         }
-        if (scrollY + avail < total) {
-            drawArrow(g, W / 2, listTop + avail + 2, false, COLOR_SOFTKEY);
+        String[] titleLines = wrapText(titleFont, title == null ? "" : title, inner);
+        int titleH = titleLines.length * titleFont.getHeight();
+        int height = CARD_PAD + titleH + 6 + textLines * LINE_STEP + CARD_PAD + BUTTON_H + CARD_PAD;
+        int y = (H - height) / 2;
+        int w = W - 2 * CARD_X;
+
+        g.setColor(MenuTheme.COLOR_PANEL);
+        g.fillRect(CARD_X, y, w, height);
+        g.setColor(MenuTheme.COLOR_ACCENT);
+        g.fillRect(CARD_X, y, w, 1);
+
+        int ty = y + CARD_PAD;
+        g.setFont(titleFont);
+        g.setColor(MenuTheme.COLOR_TITLE);
+        for (String line : titleLines) {
+            g.drawString(line, W / 2, ty, Graphics.TOP | Graphics.HCENTER);
+            ty += titleFont.getHeight();
+        }
+        ty += 6;
+        g.setFont(plain);
+        g.setColor(MenuTheme.COLOR_VALUE);
+        for (String[] block : lines) {
+            for (String line : block) {
+                g.drawString(line, W / 2, ty, Graphics.TOP | Graphics.HCENTER);
+                ty += LINE_STEP;
+            }
         }
 
-        g.setFont(font());
-        String left = GameBridge.menuSoftLabel(menu, 0);
-        String right = GameBridge.menuSoftLabel(menu, 1);
-        g.setColor(COLOR_SOFTKEY);
-        if (left != null && !left.isEmpty()) {
-            g.drawString(left, 4, SOFTKEY_Y, 16 | 4);
+        cardButtonY = y + height - CARD_PAD - BUTTON_H;
+        int bw = (w - 3 * CARD_PAD) / 2;
+        int pad = (BUTTON_H - bold.getHeight()) / 2 + MenuTheme.TEXT_DROP;
+        g.setFont(bold);
+        for (int slot = 0; slot < 2; slot++) {
+            int bx = CARD_X + CARD_PAD + slot * (bw + CARD_PAD);
+            g.setColor(slot == cardFocus ? MenuTheme.COLOR_BAR : MenuTheme.COLOR_BUTTON);
+            g.fillRect(bx, cardButtonY, bw, BUTTON_H);
+            if (slot == cardFocus) {
+                g.setColor(MenuTheme.COLOR_ACCENT);
+                g.fillRect(bx, cardButtonY, bw, 1);
+            }
+            g.setColor(MenuTheme.COLOR_SELECTED);
+            g.drawString(slot == 0 ? left : right, bx + bw / 2, cardButtonY + pad, Graphics.TOP | Graphics.HCENTER);
         }
-        if (right != null && !right.isEmpty()) {
-            g.drawString(right, W - 4, SOFTKEY_Y, 16 | 8);
-        }
+    }
 
-        mirrorCount = count;
+    private static String join(String[] parts) {
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (sb.length() > 0) {
+                sb.append(part.isEmpty() || sb.charAt(sb.length() - 1) == '\n' ? "" : " ");
+            }
+            sb.append(part.isEmpty() ? "\n\n" : part);
+        }
+        return sb.toString();
     }
 
     public static void tap(int screenX, int screenY) {
         Vector2 p = Graphics.toVirtual(screenX, screenY);
         int menuId = GameBridge.currentMenuId();
+        if (menuId == MENU_SETTINGS) {
+            SettingsMenu.tap(p.x, p.y);
+            return;
+        }
         if (isCustom(menuId)) {
             int row = hoverRowCustom(p.x, p.y, customCount);
             if (row != -1) {
@@ -312,22 +454,29 @@ public final class MenuOverlay {
         if (menu == null) {
             return;
         }
+        if (cardButtonY >= 0) {
+            if (p.y >= cardButtonY && p.y < cardButtonY + BUTTON_H && p.x >= CARD_X && p.x < W - CARD_X) {
+                Canvas.dispatchKeyPressed(p.x < W / 2 ? -6 : -7);
+            }
+            return;
+        }
         int row = hoverRowMirror(p.x, p.y, mirrorCount);
         if (row != -1) {
             GameBridge.menuSetSelected(menu, row);
             Canvas.dispatchKeyPressed(-5);
             return;
         }
-        int soft = hoverSoftkey(p.x, p.y);
-        if (soft == 0) {
-            Canvas.dispatchKeyPressed(-6);
-        } else if (soft == 1) {
+        if (mirrorBack && MenuTheme.onBack(p.x, p.y, 0, MenuTheme.RULE_Y)) {
             Canvas.dispatchKeyPressed(-7);
         }
     }
 
     public static void pan(float screenDeltaY) {
         Object menu = GameBridge.currentMenu();
+        if (menu != null && GameBridge.currentMenuId() == MENU_SETTINGS) {
+            SettingsMenu.scrollBy(-Math.round(screenDeltaY * Graphics.screenToWorldScaleY()));
+            return;
+        }
         if (menu == null || isCustom(GameBridge.currentMenuId())) {
             return;
         }
@@ -340,10 +489,20 @@ public final class MenuOverlay {
     public static void hover(int screenX, int screenY) {
         Vector2 p = Graphics.toVirtual(screenX, screenY);
         int menuId = GameBridge.currentMenuId();
+        if (menuId == MENU_SETTINGS) {
+            SettingsMenu.hover(p.x, p.y);
+            return;
+        }
         if (isCustom(menuId)) {
             int row = hoverRowCustom(p.x, p.y, customCount);
             if (row != -1) {
                 selected = row;
+            }
+            return;
+        }
+        if (cardButtonY >= 0) {
+            if (p.y >= cardButtonY && p.y < cardButtonY + BUTTON_H && p.x >= CARD_X && p.x < W - CARD_X) {
+                cardFocus = p.x < W / 2 ? 0 : 1;
             }
             return;
         }
@@ -389,7 +548,7 @@ public final class MenuOverlay {
         return helpLines;
     }
 
-    private static String[] wrapText(Font font, String text, int maxWidth) {
+    static String[] wrapText(Font font, String text, int maxWidth) {
         List<String> out = new ArrayList<>();
         for (String paragraph : text.split("\n", -1)) {
             if (paragraph.isEmpty()) {
@@ -417,22 +576,6 @@ public final class MenuOverlay {
         return out.toArray(new String[0]);
     }
 
-    private static void drawArrow(Graphics g, int cx, int cy, boolean up, int color) {
-        g.setColor(color);
-        int size = 4;
-        for (int r = 0; r < size; r++) {
-            int w = up ? (r * 2 + 1) : (size - r) * 2 - 1;
-            g.fillRect(cx - w / 2, cy + r, w, 1);
-        }
-    }
-
-    private static int hoverSoftkey(float vx, float vy) {
-        if (vy < SOFTKEY_Y - 16) {
-            return -1;
-        }
-        return vx < W / 2 ? 0 : 1;
-    }
-
     private static void activate(int index) {
         if (index < 0 || index >= actions.length) {
             return;
@@ -456,39 +599,24 @@ public final class MenuOverlay {
             case ACT_EXIT:
                 GameBridge.enqueueEvent(11);
                 break;
-            case ACT_SOUND:
-                GameBridge.setSoundEnabled(!GameBridge.soundEnabled());
-                break;
-            case ACT_FULLSCREEN:
-                pendingFullscreen = true;
-                break;
-            case ACT_LIGHTING:
-                Graphics.setLightingEnabled(!Graphics.isLightingEnabled());
-                break;
-            case ACT_CUES:
-                Graphics.setCuesEnabled(!Graphics.isCuesEnabled());
-                break;
-            case ACT_UPSCALE:
-                Graphics.setUpscaleEnabled(!Graphics.isUpscaleEnabled());
-                break;
-            case ACT_RESET:
-                GameBridge.openMenu(9);
-                break;
-            case ACT_BACK:
-                back();
-                break;
             default:
                 break;
         }
     }
 
-    private static void back() {
+    static void toggleFullscreen() {
+        pendingFullscreen = true;
+    }
+
+    static void back() {
         if (GameBridge.currentMenuId() == MENU_SETTINGS) {
             GameBridge.openMenu(0);
+        } else if (GameBridge.currentMenuId() == MENU_MAIN && GameBridge.canContinue()) {
+            GameBridge.enqueueEvent(52);
         }
     }
 
-    private static boolean isDesktop() {
+    static boolean isDesktop() {
         return Gdx.app != null && Gdx.app.getType() == Application.ApplicationType.Desktop;
     }
 
@@ -496,26 +624,14 @@ public final class MenuOverlay {
         List<String> ls = new ArrayList<>();
         List<Integer> as = new ArrayList<>();
 
-        if (menuId == MENU_SETTINGS) {
-            add(ls, as, "Sound: " + (GameBridge.soundEnabled() ? "On" : "Off"), ACT_SOUND);
-            if (isDesktop()) {
-                add(ls, as, "Fullscreen: " + (Gdx.graphics.isFullscreen() ? "On" : "Off"), ACT_FULLSCREEN);
-            }
-            add(ls, as, "Lighting: " + (Graphics.isLightingEnabled() ? "Enhanced" : "Original"), ACT_LIGHTING);
-            add(ls, as, "Cues: " + (Graphics.isCuesEnabled() ? "On" : "Off"), ACT_CUES);
-            add(ls, as, "Upscale: " + (Graphics.isUpscaleEnabled() ? "On" : "Off"), ACT_UPSCALE);
-            add(ls, as, textOr(18, "Reset Game"), ACT_RESET);
-            add(ls, as, textOr(13, "Back"), ACT_BACK);
-        } else {
-            if (GameBridge.canContinue()) {
-                add(ls, as, textOr(3, "Continue"), ACT_CONTINUE);
-            }
-            add(ls, as, textOr(2, "New Game"), ACT_NEW_GAME);
-            add(ls, as, textOr(4, "Settings"), ACT_SETTINGS);
-            add(ls, as, textOr(5, "Help"), ACT_HELP);
-            add(ls, as, textOr(6, "About"), ACT_ABOUT);
-            add(ls, as, textOr(7, "Exit"), ACT_EXIT);
+        if (GameBridge.canContinue()) {
+            add(ls, as, textOr(3, "Continue"), ACT_CONTINUE);
         }
+        add(ls, as, textOr(2, "New Game"), ACT_NEW_GAME);
+        add(ls, as, textOr(4, "Settings"), ACT_SETTINGS);
+        add(ls, as, textOr(5, "Help"), ACT_HELP);
+        add(ls, as, textOr(6, "About"), ACT_ABOUT);
+        add(ls, as, textOr(7, "Exit"), ACT_EXIT);
 
         String[] newLabels = ls.toArray(new String[0]);
         int[] newActions = new int[as.size()];
@@ -537,16 +653,8 @@ public final class MenuOverlay {
         as.add(action);
     }
 
-    private static String textOr(int id, String fallback) {
+    static String textOr(int id, String fallback) {
         String s = GameBridge.text(id);
         return s != null && !s.isEmpty() ? s : fallback;
-    }
-
-    private static void drawShadowed(Graphics g, String text, int x, int y, int color) {
-        int anchor = 16 | 1;
-        g.setColor(COLOR_SHADOW);
-        g.drawString(text, x + 1, y + 1, anchor);
-        g.setColor(color);
-        g.drawString(text, x, y, anchor);
     }
 }
