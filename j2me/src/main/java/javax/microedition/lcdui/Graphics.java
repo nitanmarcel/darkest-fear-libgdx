@@ -41,8 +41,10 @@ public class Graphics {
     static final int TILE = 16;
     private static final String LIGHT_STORE = "df_light";
     private static final String CUES_STORE = "df_cues";
+    private static final String UPSCALE_STORE = "df_upscale";
     static boolean lightingEnabled = true;
     static boolean cuesEnabled = true;
+    static boolean upscaleEnabled = true;
 
     static boolean sceneClassifyDebug;
 
@@ -110,6 +112,7 @@ public class Graphics {
         objectLightShader = loadShader("objectlight", "objectlight");
         lightingEnabled = loadFlag(LIGHT_STORE, true);
         cuesEnabled = loadFlag(CUES_STORE, true);
+        upscaleEnabled = loadFlag(UPSCALE_STORE, true);
     }
 
     static ShaderProgram loadShader(String vert, String frag) {
@@ -219,6 +222,15 @@ public class Graphics {
         saveFlag(CUES_STORE, enabled);
     }
 
+    public static boolean isUpscaleEnabled() {
+        return upscaleEnabled;
+    }
+
+    public static void setUpscaleEnabled(boolean enabled) {
+        upscaleEnabled = enabled;
+        saveFlag(UPSCALE_STORE, enabled);
+    }
+
     private static boolean loadFlag(String store, boolean def) {
         try {
             javax.microedition.rms.RecordStore rs =
@@ -257,6 +269,10 @@ public class Graphics {
         }
         darkestfear.menu.LightBridge.flattenFloor(s.playerRow, s.playerCol);
         LightEngine.render(s);
+    }
+
+    static Texture upscaledSheet(Image img) {
+        return upscaleEnabled ? img.upscaledTexture() : null;
     }
 
     public static void present() {
@@ -346,7 +362,12 @@ public class Graphics {
             } else {
                 SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
             }
-            batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            Texture upscaled = upscaledSheet(img);
+            if (upscaled != null) {
+                batch.draw(upscaled, x, y, iw, ih, 0, 0, upscaled.getWidth(), upscaled.getHeight(), false, true);
+            } else {
+                batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            }
             SceneCompositor.flushCues();
             batch.setColor(Color.WHITE);
         }

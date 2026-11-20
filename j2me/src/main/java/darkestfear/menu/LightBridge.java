@@ -559,6 +559,25 @@ public final class LightBridge {
         }
     }
 
+    public static int[] spriteFrames(Object img) {
+        int count = spriteCount();
+        int[] frames = new int[count * 5];
+        int n = 0;
+        for (int id = 0; id < count; id++) {
+            short[] a = spriteAttr(id);
+            boolean tile = isTileSprite(id);
+            if (a == null || spriteImage(id) != img) {
+                continue;
+            }
+            frames[n++] = a[0];
+            frames[n++] = a[1];
+            frames[n++] = a[2];
+            frames[n++] = a[3];
+            frames[n++] = tile ? 1 : 0;
+        }
+        return java.util.Arrays.copyOf(frames, n);
+    }
+
     public static Object spriteImage(int spriteId) {
         short[] a = spriteAttr(spriteId);
         if (a == null || a.length < 7 || fSpriteImages == null) {
