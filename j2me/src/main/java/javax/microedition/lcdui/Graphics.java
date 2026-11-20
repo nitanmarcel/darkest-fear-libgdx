@@ -170,8 +170,12 @@ public class Graphics {
         SceneCompositor.composite(gameFbo);
     }
 
+    static boolean hudHidden() {
+        return darkestfear.menu.MenuOverlay.active() || darkestfear.menu.GameBridge.inCutscene();
+    }
+
     private static int overlayBand(int y) {
-        return y >= playAreaH && !darkestfear.menu.MenuOverlay.active() ? SceneCompositor.HUD : SceneCompositor.FX;
+        return y >= playAreaH && !hudHidden() ? SceneCompositor.HUD : SceneCompositor.FX;
     }
 
     public static void beginOverlay() {
@@ -246,7 +250,7 @@ public class Graphics {
     public static void present() {
         if (gameFbo == null) return;
 
-        boolean menu = darkestfear.menu.MenuOverlay.active() || darkestfear.menu.GameBridge.inCutscene();
+        boolean menu = hudHidden();
 
         Texture tex = gameFbo.getColorBufferTexture();
 
@@ -326,7 +330,7 @@ public class Graphics {
             batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
         } else {
             if (clipY >= playAreaH) {
-                SceneCompositor.setBand(SceneCompositor.HUD);
+                SceneCompositor.setBand(overlayBand(clipY));
             } else {
                 SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
             }
