@@ -16,6 +16,8 @@ public class Image {
     private final Pixmap pixmap;
     private Texture texture;
     private boolean dirty;
+    private Texture upscaled;
+    private boolean upscaleTried;
 
     private Image(boolean mutable, int width, int height, Pixmap pixmap) {
         this.mutable = mutable;
@@ -81,6 +83,23 @@ public class Image {
 
     void markDirty() {
         dirty = true;
+    }
+
+    Texture upscaledTexture() {
+        if (!upscaleTried) {
+            upscaleTried = true;
+            int[] frames = darkestfear.menu.LightBridge.spriteFrames(this);
+            if (frames.length > 0) {
+                upscaled = GlThread.call(() -> {
+                    Pixmap pm = SpriteUpscaler.upscale(pixmap, frames);
+                    Texture t = new Texture(pm);
+                    t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+                    pm.dispose();
+                    return t;
+                });
+            }
+        }
+        return upscaled;
     }
 
     Texture texture() {

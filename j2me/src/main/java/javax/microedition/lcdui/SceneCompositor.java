@@ -265,7 +265,13 @@ final class SceneCompositor {
             Graphics.batch.flush();
             Gdx.gl.glScissor(0, Graphics.FBO_H - bottom * sc, Graphics.FBO_W, bottom * sc);
             Graphics.batch.setPackedColor(pack(cx, cy, CLS_PLAYER, FLAT));
-            Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+            Texture upscaled = Graphics.upscaledSheet((Image) img);
+            int up = SpriteUpscaler.SCALE;
+            if (upscaled != null) {
+                Graphics.batch.draw(upscaled, x, y, a[2], a[3], a[0] * up, a[1] * up, a[2] * up, a[3] * up, false, true);
+            } else {
+                Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+            }
         }
         if (drawn) {
             Graphics.batch.flush();
@@ -305,10 +311,10 @@ final class SceneCompositor {
                     int py = r * Graphics.TILE + oy;
                     int west = a[4];
                     Graphics.batch.setPackedColor(pack((c - 1) * Graphics.TILE + ox, py, CLS_PROP, ALONG_Y));
-                    Graphics.batch.draw(((Image) img).texture(), x, y, west, a[3], a[0], a[1], west, a[3], false, true);
+                    drawTile((Image) img, x, y, west, a[3], a[0], a[1], west, a[3]);
                     Graphics.batch.setPackedColor(pack((c + 1) * Graphics.TILE + ox, py, CLS_PROP, ALONG_Y));
-                    Graphics.batch.draw(((Image) img).texture(), x + west, y, a[2] - west, a[3],
-                            a[0] + west, a[1], a[2] - west, a[3], false, true);
+                    drawTile((Image) img, x + west, y, a[2] - west, a[3],
+                            a[0] + west, a[1], a[2] - west, a[3]);
                     cue(s, sid, x, y, r, c);
                     flushCues();
                     continue;
@@ -317,10 +323,10 @@ final class SceneCompositor {
                     int west = a[4];
                     Graphics.batch.setPackedColor(pack((c - 1) * Graphics.TILE + ox, (r + 1) * Graphics.TILE + oy,
                             CLS_WALL, FLAT));
-                    Graphics.batch.draw(((Image) img).texture(), x, y, west, a[3], a[0], a[1], west, a[3], false, true);
+                    drawTile((Image) img, x, y, west, a[3], a[0], a[1], west, a[3]);
                     Graphics.batch.setPackedColor(tileBits(s, r, c));
-                    Graphics.batch.draw(((Image) img).texture(), x + west, y, a[2] - west, a[3],
-                            a[0] + west, a[1], a[2] - west, a[3], false, true);
+                    drawTile((Image) img, x + west, y, a[2] - west, a[3],
+                            a[0] + west, a[1], a[2] - west, a[3]);
                     continue;
                 }
                 short[] door = perSprite && isWallPiece(code) && c + 1 < s.cols && isFrontDoor(s.grid[r][c + 1])
@@ -329,16 +335,16 @@ final class SceneCompositor {
                 if (door != null && tipX > 0 && tipX < a[2] && tipH > 0 && tipH < a[3]) {
                     Graphics.batch.setPackedColor(pack((c + 1) * Graphics.TILE + ox, (r - 1) * Graphics.TILE + oy,
                             CLS_WALL, FLAT));
-                    Graphics.batch.draw(((Image) img).texture(), x + tipX, y, a[2] - tipX, tipH,
-                            a[0] + tipX, a[1], a[2] - tipX, tipH, false, true);
+                    drawTile((Image) img, x + tipX, y, a[2] - tipX, tipH,
+                            a[0] + tipX, a[1], a[2] - tipX, tipH);
                     Graphics.batch.setPackedColor(tileBits(s, r, c));
-                    Graphics.batch.draw(((Image) img).texture(), x, y, tipX, a[3], a[0], a[1], tipX, a[3], false, true);
-                    Graphics.batch.draw(((Image) img).texture(), x + tipX, y + tipH, a[2] - tipX, a[3] - tipH,
-                            a[0] + tipX, a[1] + tipH, a[2] - tipX, a[3] - tipH, false, true);
+                    drawTile((Image) img, x, y, tipX, a[3], a[0], a[1], tipX, a[3]);
+                    drawTile((Image) img, x + tipX, y + tipH, a[2] - tipX, a[3] - tipH,
+                            a[0] + tipX, a[1] + tipH, a[2] - tipX, a[3] - tipH);
                     continue;
                 }
                 Graphics.batch.setPackedColor(perSprite ? tileBits(s, r, c) : WHITE);
-                Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+                drawTile((Image) img, x, y, a[2], a[3], a[0], a[1], a[2], a[3]);
                 if (perSprite) {
                     cue(s, sid, x, y, r, c);
                     flushCues();
@@ -346,6 +352,16 @@ final class SceneCompositor {
             }
         }
         Graphics.batch.setPackedColor(WHITE);
+    }
+
+    private static void drawTile(Image img, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {
+        Texture upscaled = Graphics.upscaledSheet(img);
+        if (upscaled != null) {
+            int up = SpriteUpscaler.SCALE;
+            Graphics.batch.draw(upscaled, x, y, w, h, sx * up, sy * up, sw * up, sh * up, false, true);
+        } else {
+            Graphics.batch.draw(img.texture(), x, y, w, h, sx, sy, sw, sh, false, true);
+        }
     }
 
     static void routeSprite(Image img, int drawX, int drawY, int srcX, int srcY, int w, int h) {
