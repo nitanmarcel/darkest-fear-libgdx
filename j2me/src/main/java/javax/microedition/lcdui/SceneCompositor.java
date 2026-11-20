@@ -22,7 +22,36 @@ final class SceneCompositor {
     private static final boolean[] FLOOR_LIT = {true, true, false, false, false, false, false};
     private static final boolean[] PER_SPRITE = {false, false, true, true, true, false, false};
 
-    private static final int CLS_WALL = 1, CLS_PROP = 2, CLS_ACTOR = 3, CLS_LOW = 4;
+    private static final int CLS_WALL = 1, CLS_PROP = 2, CLS_ACTOR = 3, CLS_LOW = 4, CLS_PLAYER = 5;
+
+    private static final float DANGER_FADE = 6f;
+    private static final float DANGER_BPM_MIN = 70f, DANGER_BPM_MAX = 130f;
+    private static final float DANGER_BODY = 0.35f, DANGER_PULSE = 0.45f, PERSON_BODY = 0.1f;
+    private static final float DANGER_VIGNETTE_MIN = 0.30f, DANGER_VIGNETTE_MAX = 0.65f;
+    private static final int VIGNETTE_SIZE = 64;
+
+    private static final int CLS_CUE = 6;
+    // The sprites the game's own draw code uses for a patient and a child not yet saved by light.
+    private static final int PATIENT_UNSAVED = 60, CHILD_UNSAVED = 79;
+    private static final float CUE_R = 0.46f, CUE_G = 0.39f, CUE_B = 0.70f;
+    // Cue pixels per sprite: sprite id, x, y, w, h in sprite pixels, kind. An ember marks where the
+    // light would be on an unlit source; a handle marks the part of a usable object you'd grab.
+    private static final int EMBER = 0, HANDLE = 1;
+    private static final int[] CUES = {
+        92, 3, 6, 2, 2, EMBER,
+        91, 0, 2, 1, 3, EMBER,
+        50, 3, 4, 2, 2, EMBER,
+        57, 10, 4, 2, 2, EMBER,
+        48, 8, 14, 1, 4, EMBER,
+        54, 8, 10, 1, 5, EMBER,
+        1, 16, 13, 3, 1, HANDLE,
+        42, 9, 12, 1, 2, HANDLE,
+        13, 6, 15, 2, 1, HANDLE,
+        13, 11, 15, 2, 1, HANDLE,
+    };
+    private static final float EMBER_PERIOD = 2.4f, EMBER_MIN = 0.25f, CUE_LIT = 0.25f, HANDLE_LEVEL = 0.6f;
+    private static final float EMBER_RANGE = 7f, HANDLE_RANGE = 2.5f;
+    private static final int MAX_PENDING = 4;
     private static final float WHITE = Color.WHITE.toFloatBits();
 
     private static final float STRUCT_FLOOR = 0.07f;
@@ -42,6 +71,15 @@ final class SceneCompositor {
     private static int[] tileSid;
     private static float[] capColor;
     private static int selR, selC;
+
+    private static float dangerAmount, dangerProgress, dangerPhase, dangerPulse;
+    private static int playerX = Integer.MIN_VALUE, playerY;
+    private static Texture vignette;
+    private static float cueTime;
+    private static float dimBody;
+    private static int cuesPending;
+    private static final int[] cueRect = new int[MAX_PENDING * 4];
+    private static float cueBits;
 
     static FrameBuffer band(int i) {
         return i >= 0 && i < BAND_COUNT ? bands[i] : null;
@@ -95,6 +133,7 @@ final class SceneCompositor {
         bands[b].begin();
         Gdx.gl.glViewport(0, 0, Graphics.FBO_W, Graphics.FBO_H);
         Graphics.batch.setProjectionMatrix(Graphics.gameCam.combined);
+        cuesPending = 0;
         Graphics.batch.setShader(PER_SPRITE[b] ? Graphics.objectLightShader : null);
         Graphics.batch.begin();
         if (PER_SPRITE[b] && Graphics.objectLightShader != null) {
@@ -135,6 +174,9 @@ final class SceneCompositor {
         sh.setUniformf("u_actorPixel", LightTuning.actorPixel);
         sh.setUniformf("u_wallSoft", LightTuning.wallSoft);
         sh.setUniformf("u_debug", debug ? 1f : 0f);
+        sh.setUniformf("u_cueColor", CUE_R, CUE_G, CUE_B);
+        dimBody = Graphics.cuesEnabled ? PERSON_BODY : 0f;
+        sh.setUniformf("u_dangerBody", dimBody);
         if (lit) {
             LightEngine.lightmap().bind(1);
             LightEngine.bounce().bind(2);
@@ -165,6 +207,7 @@ final class SceneCompositor {
             return false;
         }
         frame = s;
+        updateDanger(s);
         setBand(OBJECTS);
         Graphics.batch.flush();
         int sc = Graphics.RENDER_SCALE;
@@ -172,7 +215,63 @@ final class SceneCompositor {
         Gdx.gl.glScissor(0, Graphics.FBO_H - Graphics.playAreaH * sc, Graphics.FBO_W, Graphics.playAreaH * sc);
         drawObjects(s);
         Graphics.batch.flush();
+        drawUnlitPeople(s);
         return true;
+    }
+
+    // The game skips people standing on unlit tiles, though they still block and talk. Draw them
+    // ourselves so they get the same dim body as the player.
+    private static void drawUnlitPeople(LightBridge.LightState s) {
+        byte[][] t = s.interactables;
+        if (!Graphics.cuesEnabled || !lit() || Graphics.objectLightShader == null
+                || t == null || t.length < 4 || t[0] == null) {
+            return;
+        }
+        int n = Math.min(LightBridge.interactableCount(), t[0].length);
+        int ox = Graphics.VIRTUAL_WIDTH / 2 - s.camX;
+        int oy = Graphics.playAreaH / 2 - s.camY;
+        int sc = Graphics.RENDER_SCALE;
+        boolean drawn = false;
+        for (int i = 0; i < n; i++) {
+            int row = t[0][i], col = t[1][i], variant = t[3][i];
+            if (row < 0 || row >= s.rows || col < 0 || col >= s.cols || s.grid[row][col] != 0) {
+                continue;
+            }
+            int sid = variant == 18 ? PATIENT_UNSAVED : variant == 19 ? CHILD_UNSAVED : LightBridge.npcSpriteId(variant);
+            short[] a = LightBridge.spriteAttr(sid);
+            Object img = LightBridge.spriteImage(sid);
+            if (a == null || !(img instanceof Image)) {
+                continue;
+            }
+            int cx = col * Graphics.TILE + ox, cy = row * Graphics.TILE + oy;
+            int x = cx - a[4], y = cy - a[5];
+            if (x + a[2] <= 0 || x >= Graphics.VIRTUAL_WIDTH || y + a[3] <= 0 || y >= Graphics.playAreaH) {
+                continue;
+            }
+            int bottom = Graphics.playAreaH;
+            if (row + 1 < s.rows && s.grid[row + 1][col] < 0) {
+                short[] below = LightBridge.spriteAttr(tileSid[-s.grid[row + 1][col]]);
+                if (below != null) {
+                    bottom = Math.min(bottom, (row + 1) * Graphics.TILE + oy - below[5]);
+                }
+            }
+            if (bottom <= 0) {
+                continue;
+            }
+            if (!drawn) {
+                setBand(ACTORS);
+                drawn = true;
+            }
+            Graphics.batch.flush();
+            Gdx.gl.glScissor(0, Graphics.FBO_H - bottom * sc, Graphics.FBO_W, bottom * sc);
+            Graphics.batch.setPackedColor(pack(cx, cy, CLS_PLAYER, FLAT));
+            Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+        }
+        if (drawn) {
+            Graphics.batch.flush();
+            Graphics.batch.setPackedColor(WHITE);
+            Gdx.gl.glScissor(0, Graphics.FBO_H - Graphics.playAreaH * sc, Graphics.FBO_W, Graphics.playAreaH * sc);
+        }
     }
 
     private static void drawObjects(LightBridge.LightState s) {
@@ -210,6 +309,8 @@ final class SceneCompositor {
                     Graphics.batch.setPackedColor(pack((c + 1) * Graphics.TILE + ox, py, CLS_PROP, ALONG_Y));
                     Graphics.batch.draw(((Image) img).texture(), x + west, y, a[2] - west, a[3],
                             a[0] + west, a[1], a[2] - west, a[3], false, true);
+                    cue(s, sid, x, y, r, c);
+                    flushCues();
                     continue;
                 }
                 if (perSprite && isWallPiece(code) && r + 1 < s.rows && isSideDoor(s.grid[r + 1][c])) {
@@ -238,6 +339,10 @@ final class SceneCompositor {
                 }
                 Graphics.batch.setPackedColor(perSprite ? tileBits(s, r, c) : WHITE);
                 Graphics.batch.draw(((Image) img).texture(), x, y, a[2], a[3], a[0], a[1], a[2], a[3], false, true);
+                if (perSprite) {
+                    cue(s, sid, x, y, r, c);
+                    flushCues();
+                }
             }
         }
         Graphics.batch.setPackedColor(WHITE);
@@ -269,13 +374,173 @@ final class SceneCompositor {
                 Graphics.batch.setColor(0f, 0f, 0f, 0f);
             } else if (perSprite && inGrid && s.grid[row][col] < 0) {
                 Graphics.batch.setPackedColor(tileBits(s, row, col));
+                cue(s, id, drawX + a[0], drawY + a[1], row, col);
             }
             return;
         }
         setBand(ACTORS);
-        if (perSprite) {
-            Graphics.batch.setPackedColor(pack(px, py, CLS_ACTOR, FLAT));
+        if (perSprite && inGrid) {
+            cue(s, id, drawX + a[0], drawY + a[1], row, col);
         }
+        if (perSprite) {
+            int cls = CLS_ACTOR;
+            int cx = drawX + srcX + w / 2, cy = drawY + srcY + h / 2;
+            boolean player = Math.abs(cx - playerX) <= 8 && cy >= playerY - 18 && cy <= playerY + 6;
+            if (player || (inGrid && personAt(s, row, col))) {
+                cls = CLS_PLAYER;
+                float warned = (1f - dangerProgress) * (1f - DANGER_PULSE * (1f - dangerPulse));
+                float body = !Graphics.cuesEnabled ? 0f
+                        : player ? DANGER_BODY * (1f + dangerAmount * (warned - 1f)) : PERSON_BODY;
+                if (body != dimBody) {
+                    Graphics.batch.flush();
+                    Graphics.objectLightShader.setUniformf("u_dangerBody", body);
+                    dimBody = body;
+                }
+            }
+            Graphics.batch.setPackedColor(pack(px, py, cls, FLAT));
+        }
+    }
+
+    private static void cue(LightBridge.LightState s, int sid, int x, int y, int row, int col) {
+        if (!Graphics.cuesEnabled || !lit() || s.playerRow < 0) {
+            return;
+        }
+        float alpha = -1f;
+        for (int i = 0; i < CUES.length && cuesPending < MAX_PENDING; i += 6) {
+            if (CUES[i] != sid) {
+                continue;
+            }
+            if (alpha < 0f) {
+                alpha = cueAlpha(s, row, col, CUES[i + 5]);
+                if (alpha <= 0f) {
+                    return;
+                }
+                cueBits = Color.toFloatBits(0, 0, CLS_CUE * 32, (int) (alpha * 254f));
+            }
+            int k = cuesPending++ * 4;
+            cueRect[k] = x + CUES[i + 1];
+            cueRect[k + 1] = y + CUES[i + 2];
+            cueRect[k + 2] = CUES[i + 3];
+            cueRect[k + 3] = CUES[i + 4];
+        }
+    }
+
+    private static float cueAlpha(LightBridge.LightState s, int row, int col, int kind) {
+        int code = s.grid[row][col];
+        float range = kind == EMBER ? EMBER_RANGE : HANDLE_RANGE;
+        int dr = row - s.playerRow, dc = col - s.playerCol;
+        if (dr * dr + dc * dc > range * range || !sees(s, row, col)) {
+            return 0f;
+        }
+        int level = code;
+        if (level < 0) {
+            level = 0;
+            for (int k = 0; k < EAST_WEST_NORTH.length + 2; k += 2) {
+                int nr = row + (k < 6 ? EAST_WEST_NORTH[k] : 1), nc = col + (k < 6 ? EAST_WEST_NORTH[k + 1] : 0);
+                if (open(s, nr, nc)) {
+                    level = Math.max(level, s.grid[nr][nc]);
+                }
+            }
+        }
+        float strength = HANDLE_LEVEL;
+        if (kind == EMBER) {
+            float phase = cueTime / EMBER_PERIOD + ((row * 31 + col * 17) & 15) / 16f;
+            strength = EMBER_MIN + (1f - EMBER_MIN) * (0.5f + 0.5f * (float) Math.sin(phase * 2.0 * Math.PI));
+        }
+        return strength * (1f - (1f - CUE_LIT) * Math.min(level, 7) / 7f);
+    }
+
+    static void flushCues() {
+        if (cuesPending == 0) {
+            return;
+        }
+        Graphics.batch.setPackedColor(cueBits);
+        for (int k = 0; k < cuesPending * 4; k += 4) {
+            Graphics.batch.draw(Graphics.white, cueRect[k], cueRect[k + 1], cueRect[k + 2], cueRect[k + 3]);
+        }
+        cuesPending = 0;
+    }
+
+    private static boolean sees(LightBridge.LightState s, int row, int col) {
+        int r = s.playerRow, c = s.playerCol;
+        int dr = Math.abs(row - r), dc = Math.abs(col - c);
+        int sr = r < row ? 1 : -1, sc = c < col ? 1 : -1;
+        int err = dc - dr;
+        while (r != row || c != col) {
+            int e2 = 2 * err;
+            if (e2 > -dr) {
+                err -= dr;
+                c += sc;
+            }
+            if (e2 < dc) {
+                err += dc;
+                r += sr;
+            }
+            if ((r != row || c != col) && s.grid[r][c] <= -1 && s.grid[r][c] >= -19) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean personAt(LightBridge.LightState s, int row, int col) {
+        byte[][] t = s.interactables;
+        if (t == null || t.length < 4 || t[0] == null) {
+            return false;
+        }
+        for (int i = Math.min(LightBridge.interactableCount(), t[0].length) - 1; i >= 0; i--) {
+            if (t[0][i] == row && t[1][i] == col) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void updateDanger(LightBridge.LightState s) {
+        float dt = Gdx.graphics.getDeltaTime();
+        cueTime = (cueTime + dt) % (EMBER_PERIOD * 16f);
+        boolean on = Graphics.cuesEnabled && lit();
+        float progress = on ? LightBridge.darknessProgress() : 0f;
+        if (progress > 0f) {
+            dangerProgress = progress;
+        }
+        float step = DANGER_FADE * dt;
+        dangerAmount = progress > 0f ? Math.min(1f, dangerAmount + step) : Math.max(0f, dangerAmount - step);
+        float bpm = DANGER_BPM_MIN + (DANGER_BPM_MAX - DANGER_BPM_MIN) * dangerProgress;
+        dangerPhase = (dangerPhase + dt * bpm / 60f) % 1f;
+        dangerPulse = 0.5f + 0.5f * (float) Math.sin(dangerPhase * 2.0 * Math.PI);
+        int[] p = on ? LightBridge.actor(0) : null;
+        if (p == null) {
+            playerX = Integer.MIN_VALUE;
+        } else {
+            playerX = p[0] + Graphics.VIRTUAL_WIDTH / 2 - s.camX;
+            playerY = p[1] + Graphics.playAreaH / 2 - s.camY;
+        }
+    }
+
+    private static void drawVignette() {
+        if (vignette == null) {
+            Pixmap pm = new Pixmap(VIGNETTE_SIZE, VIGNETTE_SIZE, Pixmap.Format.RGBA8888);
+            pm.setBlending(Pixmap.Blending.None);
+            for (int y = 0; y < VIGNETTE_SIZE; y++) {
+                for (int x = 0; x < VIGNETTE_SIZE; x++) {
+                    double dx = Math.abs((x + 0.5) / VIGNETTE_SIZE * 2 - 1), dy = Math.abs((y + 0.5) / VIGNETTE_SIZE * 2 - 1);
+                    double d = Math.cbrt(dx * dx * dx + dy * dy * dy);
+                    double t = Math.max(0, Math.min(1, (d - 0.45) / 0.55));
+                    pm.drawPixel(x, y, (int) Math.round(t * t * (3 - 2 * t) * 255));
+                }
+            }
+            vignette = new Texture(pm);
+            vignette.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+            pm.dispose();
+        }
+        float strength = DANGER_VIGNETTE_MIN + (DANGER_VIGNETTE_MAX - DANGER_VIGNETTE_MIN) * dangerProgress;
+        Graphics.batch.setShader(null);
+        Graphics.batch.begin();
+        Graphics.batch.setColor(1f, 1f, 1f, dangerAmount * strength * (0.8f + 0.2f * dangerPulse));
+        Graphics.batch.draw(vignette, 0, 0, Graphics.VIRTUAL_WIDTH, Graphics.playAreaH);
+        Graphics.batch.setColor(Color.WHITE);
+        Graphics.batch.end();
     }
 
     private static boolean isDecal(int id) {
@@ -410,6 +675,9 @@ final class SceneCompositor {
             if (i == HUD && Graphics.hudHidden()) {
                 continue;
             }
+            if (i == HUD && !debug && dangerAmount > 0f && frame != null) {
+                drawVignette();
+            }
             if (debug && i == OBJECTS && frame != null && Graphics.objectLightShader != null) {
                 Graphics.batch.setShader(Graphics.objectLightShader);
                 Graphics.batch.begin();
@@ -455,6 +723,10 @@ final class SceneCompositor {
                 bands[i].dispose();
                 bands[i] = null;
             }
+        }
+        if (vignette != null) {
+            vignette.dispose();
+            vignette = null;
         }
         if (classifyFbo != null) {
             classifyFbo.dispose();

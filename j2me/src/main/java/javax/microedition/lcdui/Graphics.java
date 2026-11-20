@@ -40,7 +40,9 @@ public class Graphics {
 
     static final int TILE = 16;
     private static final String LIGHT_STORE = "df_light";
+    private static final String CUES_STORE = "df_cues";
     static boolean lightingEnabled = true;
+    static boolean cuesEnabled = true;
 
     static boolean sceneClassifyDebug;
 
@@ -107,6 +109,7 @@ public class Graphics {
         sceneLightShader = loadShader("scenelight", "scenelight");
         objectLightShader = loadShader("objectlight", "objectlight");
         lightingEnabled = loadFlag(LIGHT_STORE, true);
+        cuesEnabled = loadFlag(CUES_STORE, true);
     }
 
     static ShaderProgram loadShader(String vert, String frag) {
@@ -205,6 +208,15 @@ public class Graphics {
         if (!enabled) {
             darkestfear.menu.LightBridge.restoreFloor();
         }
+    }
+
+    public static boolean isCuesEnabled() {
+        return cuesEnabled;
+    }
+
+    public static void setCuesEnabled(boolean enabled) {
+        cuesEnabled = enabled;
+        saveFlag(CUES_STORE, enabled);
     }
 
     private static boolean loadFlag(String store, boolean def) {
@@ -335,6 +347,7 @@ public class Graphics {
                 SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
             }
             batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            SceneCompositor.flushCues();
             batch.setColor(Color.WHITE);
         }
     }
