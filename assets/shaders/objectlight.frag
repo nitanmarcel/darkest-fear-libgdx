@@ -26,6 +26,8 @@ uniform float u_curveF[8];
 uniform float u_actorPixel;
 uniform float u_wallSoft;
 uniform float u_debug;
+uniform float u_dangerBody;
+uniform vec3 u_cueColor;
 
 vec3 shade(vec3 albedo, vec3 L) {
     vec3 col = albedo * (u_ambient + L);
@@ -55,6 +57,10 @@ bool is(vec3 c, vec3 key) {
 void main() {
     vec4 col = texture2D(u_texture, v_texCoords);
     col.a *= v_alpha;
+    if (v_cls > 5.5 && v_cls < 6.5) {
+        gl_FragColor = vec4(u_cueColor, col.a);
+        return;
+    }
     if (u_lit < 0.5 || v_cls > 6.5) {
         gl_FragColor = col;
         return;
@@ -65,7 +71,8 @@ void main() {
         direct = mix(direct, soft, u_wallSoft);
     }
     vec3 L = 2.0 * direct + soft * u_bounceGain;
-    if (v_cls > 2.5 && v_cls < 3.5 && u_actorPixel > 0.0) {
+    bool player = v_cls > 4.5 && v_cls < 5.5;
+    if ((player || (v_cls > 2.5 && v_cls < 3.5)) && u_actorPixel > 0.0) {
         vec3 under = 2.0 * texture2D(u_light, v_puv).rgb + texture2D(u_bounce, v_puv).rgb * u_bounceGain;
         L = mix(L, max(L, under), u_actorPixel);
     }
@@ -83,6 +90,10 @@ void main() {
     } else if (is(col.rgb, vec3(1.0, 0.988, 0.961)) || is(col.rgb, vec3(1.0, 0.824, 0.0))
             || is(col.rgb, vec3(1.0, 0.643, 0.0)) || is(col.rgb, vec3(0.890, 0.353, 0.004))) {
         rgb = col.rgb;
+    }
+
+    if (player) {
+        rgb = max(rgb, structRGB * (u_dangerBody / u_structFloor));
     }
 
     if (u_debug > 0.5) {

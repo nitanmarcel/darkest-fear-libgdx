@@ -31,6 +31,10 @@ public final class LightBridge {
     private static Field fPlates;
     private static Field fTriggers;
     private static Field fCarried;
+    private static Field fFearTime;
+    private static Field fFearLimit;
+    private static Field fInterCount;
+    private static Method mNpcSpriteId;
     private static Field fLevelIndex;
     private static Method mTileSpriteId;
     private static Field fSpriteAttr;
@@ -82,6 +86,8 @@ public final class LightBridge {
     private static int prevPlayerRow = Integer.MIN_VALUE;
     private static int prevPlayerCol = Integer.MIN_VALUE;
     private static final int DARK_TILE_SPRITE = 0x60;
+    // Levels without darkness damage set the timer limit to ~10^8 ms instead of switching it off.
+    private static final int NO_DARKNESS_DAMAGE = 60000;
 
     private LightBridge() {
     }
@@ -240,6 +246,15 @@ public final class LightBridge {
             fPlates = fieldOrNull("b", byte[][].class);
             fTriggers = fieldOrNull("d", byte[][].class);
             fCarried = fieldOrNull("k", byte.class);
+            fFearTime = fieldOrNull("e", int.class);
+            fFearLimit = fieldOrNull("f", int.class);
+            fInterCount = fieldOrNull("h", byte.class);
+            try {
+                mNpcSpriteId = levelCls.getDeclaredMethod("a", byte.class);
+                mNpcSpriteId.setAccessible(true);
+            } catch (Throwable t) {
+                mNpcSpriteId = null;
+            }
             fLevelIndex = fieldOrNull("D", byte.class);
             resolveSpriteAttrs(cl);
             resolvePlayer();
@@ -692,6 +707,58 @@ public final class LightBridge {
             return (byte[][]) f.get(level);
         } catch (Throwable t) {
             return null;
+        }
+    }
+
+    /** How far the game's darkness-damage timer has run, 0..1; 0 when the player's tile is lit. */
+    public static float darknessProgress() {
+        Object level = currentLevel();
+        if (level == null || fFearTime == null || fFearLimit == null || fPlayer == null
+                || fCharRow == null || fCharCol == null) {
+            return 0f;
+        }
+        try {
+            Object p = fPlayer.get(level);
+            byte[][] grid = (byte[][]) fGrid.get(level);
+            if (p == null || grid == null) {
+                return 0f;
+            }
+            int row = fCharRow.getByte(p), col = fCharCol.getByte(p);
+            if (row < 0 || row >= grid.length || col < 0 || col >= grid[row].length || grid[row][col] != 0) {
+                return 0f;
+            }
+            int time = fFearTime.getInt(level), limit = fFearLimit.getInt(level);
+            if (time <= 0 || limit <= 0 || limit > NO_DARKNESS_DAMAGE) {
+                return 0f;
+            }
+            return Math.min(1f, time / (float) limit);
+        } catch (Throwable t) {
+            return 0f;
+        }
+    }
+
+    /** How many rows of the interactable table the game itself draws; it can be fewer than the table holds. */
+    public static int interactableCount() {
+        Object level = currentLevel();
+        if (level == null || fInterCount == null) {
+            return 0;
+        }
+        try {
+            return fInterCount.getByte(level);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    public static int npcSpriteId(int variant) {
+        Object level = currentLevel();
+        if (level == null || mNpcSpriteId == null) {
+            return -1;
+        }
+        try {
+            return (Integer) mNpcSpriteId.invoke(level, (byte) variant);
+        } catch (Throwable t) {
+            return -1;
         }
     }
 
