@@ -407,6 +407,9 @@ final class SceneCompositor {
         Graphics.batch.setColor(Color.WHITE);
         Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         for (int i = 0; i < BAND_COUNT; i++) {
+            if (i == HUD && darkestfear.menu.MenuOverlay.active()) {
+                continue;
+            }
             if (debug && i == OBJECTS && frame != null && Graphics.objectLightShader != null) {
                 Graphics.batch.setShader(Graphics.objectLightShader);
                 Graphics.batch.begin();

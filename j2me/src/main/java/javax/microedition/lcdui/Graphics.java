@@ -171,7 +171,7 @@ public class Graphics {
     }
 
     private static int overlayBand(int y) {
-        return y >= playAreaH ? SceneCompositor.HUD : SceneCompositor.FX;
+        return y >= playAreaH && !darkestfear.menu.MenuOverlay.active() ? SceneCompositor.HUD : SceneCompositor.FX;
     }
 
     public static void beginOverlay() {
