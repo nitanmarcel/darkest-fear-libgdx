@@ -37,6 +37,7 @@ dependencies {
     implementation project(':core')
     implementation project(':j2me')
     implementation "com.badlogicgames.gdx:gdx-backend-android:$gdxVersion"
+    implementation "com.badlogicgames.gdx-controllers:gdx-controllers-android:2.2.4"
     implementation "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
 
     natives "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-armeabi-v7a"

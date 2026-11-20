@@ -2,88 +2,58 @@ package darkestfear.menu;
 
 import com.badlogic.gdx.Application;
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.Input.Keys;
+import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 
-import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.Font;
 import javax.microedition.lcdui.Graphics;
 
 public final class GameControls {
 
     private static final int MAX_POINTERS = 10;
-    private static final int CODE_SKIP_ALL = Integer.MIN_VALUE;
-    private static final int SKIP_ALL_LIMIT = 64;
+    private static final int NONE = 0, LEVEL = 1, CUTSCENE = 2;
+    private static final float DEAD_ZONE = 0.035f;
+    private static final float REACH = 0.11f;
+    private static final float STICKY = 1.1f;
+    private static final float TRAVEL = 0.08f;
+    private static final long SKIP_TAP_GUARD_MS = 400;
 
-    private static final int COLOR_FILL = 0x1A1A1A;
-    private static final int COLOR_FILL_DOWN = 0x7A1E1E;
-    private static final int COLOR_BORDER = 0x707070;
-    private static final int COLOR_LABEL = 0xE0E0E0;
+    private static final boolean[] down = new boolean[MAX_POINTERS];
+    private static int mode;
+    private static int stickPointer = -1;
+    private static int actionPointer = -1;
+    private static int direction = -1;
+    private static float originX, originY, lastX, lastY, tiltX, tiltY;
+    private static long skippedAt;
+    private static Texture padArt, nubArt, buttonArt, handArt, skipArt;
+    private static final float SIDE_X = 0.25f, SKIP_W = 0.32f;
+    private static final float MAX_UNIT_DP = 420;
 
-    private static final class Button {
-        final int code;
-        final String label;
-        float x;
-        float y;
-        float w;
-        float h;
-        boolean pressed;
-
-        Button(int code, String label) {
-            this.code = code;
-            this.label = label;
-        }
-
-        void set(float x, float y, float w, float h) {
-            this.x = x;
-            this.y = y;
-            this.w = w;
-            this.h = h;
-        }
-
-        boolean contains(float px, float py) {
-            return px >= x && px < x + w && py >= y && py < y + h;
-        }
+    private static float unit() {
+        return Math.min(Gdx.graphics.getWidth(), MAX_UNIT_DP * Gdx.graphics.getDensity());
     }
 
-    private static final Button UP = new Button(Keys.UP, "^");
-    private static final Button DOWN = new Button(Keys.DOWN, "v");
-    private static final Button LEFT = new Button(Keys.LEFT, "<");
-    private static final Button RIGHT = new Button(Keys.RIGHT, ">");
-    private static final Button A = new Button(-5, "A");
-    private static final Button MENU = new Button(-6, "MENU");
-    private static final Button NEXT = new Button(-5, "NEXT");
-    private static final Button SKIP = new Button(CODE_SKIP_ALL, "SKIP");
-    private static final Button OK = new Button(-5, "OK");
+    private static float rightX() {
+        return Gdx.graphics.getWidth() - unit() * SIDE_X;
+    }
 
-    private static final Button[] LEVEL = {UP, DOWN, LEFT, RIGHT, A, MENU};
-    private static final Button[] CUTSCENE = {NEXT, SKIP};
-    private static final Button[] POPUP = {UP, DOWN, OK};
-    private static final Button[] DIALOG = {OK};
+    private static final int COLOR_IDLE = 0x6A6A6A;
 
-    private static Button[] current;
+    private static Texture art(String name) {
+        Texture texture = new Texture(Gdx.files.internal("controls/" + name + ".png"));
+        texture.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
+        return texture;
+    }
 
     private GameControls() {
     }
 
     public static boolean active() {
-        return touchDevice() && set() != null;
+        return touchDevice() && (GameBridge.inLevel() || GameBridge.inCutscene());
     }
 
-    private static Button[] set() {
-        if (GameBridge.inLevel()) {
-            return LEVEL;
-        }
-        if (GameBridge.inCutscene()) {
-            return CUTSCENE;
-        }
-        if (GameBridge.inPopup()) {
-            return POPUP;
-        }
-        if (GameBridge.inDialog()) {
-            return DIALOG;
-        }
-        return null;
+    static boolean justSkipped() {
+        return System.currentTimeMillis() - skippedAt < SKIP_TAP_GUARD_MS;
     }
 
     private static boolean touchDevice() {
@@ -91,132 +61,154 @@ public final class GameControls {
         return type == Application.ApplicationType.Android || type == Application.ApplicationType.iOS;
     }
 
-    private static void layout(Button[] s) {
-        float w = Gdx.graphics.getWidth();
+    private static float controlsTop() {
         float h = Gdx.graphics.getHeight();
-        float m = w * 0.04f;
-        if (s == LEVEL) {
-            float bd = w * 0.14f;
-            float ox = m;
-            float oy = h - m - 3 * bd;
-            UP.set(ox + bd, oy, bd, bd);
-            LEFT.set(ox, oy + bd, bd, bd);
-            RIGHT.set(ox + 2 * bd, oy + bd, bd, bd);
-            DOWN.set(ox + bd, oy + 2 * bd, bd, bd);
-            float ba = w * 0.20f;
-            A.set(w - m - ba, h - m - ba, ba, ba);
-            float mw = w * 0.22f;
-            float mh = w * 0.10f;
-            MENU.set(w - m - mw, m, mw, mh);
-        } else if (s == CUTSCENE) {
-            float bw = w * 0.24f;
-            float bh = w * 0.12f;
-            SKIP.set(w - m - bw, h - m - bh, bw, bh);
-            NEXT.set(w - m - bw - m - bw, h - m - bh, bw, bh);
-        } else {
-            float ow = w * 0.30f;
-            float oh = w * 0.13f;
-            OK.set((w - ow) / 2, h - m - oh, ow, oh);
-            if (s == POPUP) {
-                float bd = w * 0.14f;
-                UP.set(w - m - bd, h - m - oh - m - 2 * bd, bd, bd);
-                DOWN.set(w - m - bd, h - m - oh - m - bd, bd, bd);
-            }
-        }
+        float bottom = Graphics.gameBottom();
+        return h - bottom >= unit() * 0.4f ? bottom : h * 0.6f;
+    }
+
+    private static float controlsY() {
+        float h = Gdx.graphics.getHeight();
+        return Math.max((controlsTop() + h) / 2, h - unit() * 0.45f);
     }
 
     public static void poll() {
-        Button[] s = set();
-        if (s != current) {
+        int now = GameBridge.inLevel() ? LEVEL : GameBridge.inCutscene() ? CUTSCENE : NONE;
+        if (now != mode) {
             reset();
-            current = s;
+            mode = now;
         }
-        if (s == null) {
-            return;
-        }
-        layout(s);
-        boolean[] now = new boolean[s.length];
+        float w = Gdx.graphics.getWidth();
         for (int p = 0; p < MAX_POINTERS; p++) {
-            if (!Gdx.input.isTouched(p)) {
+            boolean touched = Gdx.input.isTouched(p);
+            boolean began = touched && !down[p];
+            down[p] = touched;
+            if (!began) {
                 continue;
             }
-            float px = Gdx.input.getX(p);
-            float py = Gdx.input.getY(p);
-            for (int b = 0; b < s.length; b++) {
-                if (s[b].contains(px, py)) {
-                    now[b] = true;
-                }
+            float x = Gdx.input.getX(p), y = Gdx.input.getY(p);
+            if (mode == LEVEL && x < w / 2 && stickPointer < 0) {
+                stickPointer = p;
+                originX = x;
+                originY = y;
+                lastX = x;
+                lastY = y;
+                tiltX = 0;
+                tiltY = 0;
+            } else if (mode == LEVEL && x >= w / 2 && y >= controlsTop() && actionPointer < 0) {
+                actionPointer = p;
+                GameInput.press(GameInput.PRIMARY);
+            } else if (mode == CUTSCENE && onSkip(x, y)) {
+                skippedAt = System.currentTimeMillis();
+                GameInput.skipCutscene();
             }
         }
-        for (int b = 0; b < s.length; b++) {
-            Button btn = s[b];
-            if (btn.code == CODE_SKIP_ALL) {
-                if (now[b] && !btn.pressed) {
-                    skipCutscene();
-                }
-            } else if (now[b] && !btn.pressed) {
-                Canvas.dispatchKeyPressed(btn.code);
-            } else if (!now[b] && btn.pressed) {
-                Canvas.dispatchKeyReleased(btn.code);
+        if (stickPointer >= 0) {
+            if (Gdx.input.isTouched(stickPointer)) {
+                steer(Gdx.input.getX(stickPointer), Gdx.input.getY(stickPointer));
+            } else {
+                stickPointer = -1;
+                setDirection(-1);
             }
-            btn.pressed = now[b];
+        }
+        if (actionPointer >= 0 && !Gdx.input.isTouched(actionPointer)) {
+            actionPointer = -1;
+            GameInput.release(GameInput.PRIMARY);
         }
     }
 
-    private static void skipCutscene() {
-        for (int i = 0; i < SKIP_ALL_LIMIT && GameBridge.pendingCutscene(); i++) {
-            Canvas.dispatchKeyPressed(-5);
-            Canvas.dispatchKeyReleased(-5);
+    private static void steer(float x, float y) {
+        tiltX += x - lastX;
+        tiltY += y - lastY;
+        lastX = x;
+        lastY = y;
+        float length = (float) Math.sqrt(tiltX * tiltX + tiltY * tiltY);
+        float travel = unit() * TRAVEL;
+        if (length > travel) {
+            tiltX *= travel / length;
+            tiltY *= travel / length;
         }
+        float dx = tiltX, dy = tiltY;
+        float ax = Math.abs(dx), ay = Math.abs(dy);
+        if (Math.max(ax, ay) < unit() * DEAD_ZONE * (direction >= 0 ? 0.6f : 1f)) {
+            setDirection(-1);
+            return;
+        }
+        boolean wasHorizontal = direction == GameInput.LEFT || direction == GameInput.RIGHT;
+        boolean horizontal = direction < 0 ? ax > ay : wasHorizontal ? ax * STICKY > ay : ax > ay * STICKY;
+        setDirection(horizontal ? (dx < 0 ? GameInput.LEFT : GameInput.RIGHT) : (dy < 0 ? GameInput.UP : GameInput.DOWN));
+    }
+
+    private static void setDirection(int d) {
+        if (d == direction) {
+            return;
+        }
+        if (direction >= 0) {
+            GameInput.release(direction);
+        }
+        if (d >= 0) {
+            GameInput.press(d);
+        }
+        direction = d;
     }
 
     public static void reset() {
-        if (current == null) {
-            return;
-        }
-        for (Button b : current) {
-            if (b.pressed) {
-                if (b.code != CODE_SKIP_ALL) {
-                    Canvas.dispatchKeyReleased(b.code);
-                }
-                b.pressed = false;
-            }
+        stickPointer = -1;
+        setDirection(-1);
+        if (actionPointer >= 0) {
+            actionPointer = -1;
+            GameInput.release(GameInput.PRIMARY);
         }
     }
 
-    public static void renderHud(Graphics g) {
-        Button[] s = current;
-        if (s == null) {
-            return;
-        }
-        layout(s);
+    private static boolean onSkip(float x, float y) {
+        float u = unit();
+        return Math.abs(x - rightX()) < u * SKIP_W / 2 && Math.abs(y - controlsY()) < u * SKIP_W / 4;
+    }
 
-        Font font = Font.getFont(Font.FACE_PROPORTIONAL, Font.STYLE_BOLD, Font.SIZE_LARGE);
+    public static void renderHud(Graphics g) {
+        float u = unit();
+        Font font = MenuTheme.bold();
         BitmapFont bf = font.getBitmapFont();
         float oldX = bf.getData().scaleX;
         float oldY = bf.getData().scaleY;
-        float scale = (Gdx.graphics.getWidth() * 0.05f) / (bf.getCapHeight() * Graphics.RENDER_SCALE);
+        float scale = (u * 0.04f) / (bf.getCapHeight() * Graphics.RENDER_SCALE);
 
         Graphics.beginHud();
         try {
             g.setFont(font);
-            bf.getData().setScale(scale);
-            for (Button b : s) {
-                g.setColor(b.pressed ? COLOR_FILL_DOWN : COLOR_FILL);
-                g.fillRect((int) b.x, (int) b.y, (int) b.w, (int) b.h);
-                g.setColor(COLOR_BORDER);
-                g.drawRect((int) b.x, (int) b.y, (int) b.w, (int) b.h);
-                g.setColor(COLOR_LABEL);
-                g.drawString(b.label, (int) (b.x + b.w / 2), (int) (b.y + b.h / 2),
-                        Graphics.HCENTER | Graphics.VCENTER);
+            if (mode == LEVEL) {
+                if (padArt == null) {
+                    padArt = art("stick_pad");
+                    nubArt = art("stick_nub");
+                    buttonArt = art("button");
+                    handArt = art("icon_hand");
+                }
+                float reach = u * REACH;
+                float cx = stickPointer >= 0 ? originX : u * SIDE_X;
+                float cy = stickPointer >= 0 ? originY : controlsY();
+                float kx = cx + (direction == GameInput.LEFT ? -reach : direction == GameInput.RIGHT ? reach : 0) * 0.6f;
+                float ky = cy + (direction == GameInput.UP ? -reach : direction == GameInput.DOWN ? reach : 0) * 0.6f;
+                Graphics.drawHud(padArt, cx, cy, reach * 2.8f, reach * 2.8f, COLOR_IDLE);
+                Graphics.drawHud(nubArt, kx, ky, reach * 1.3f, reach * 1.3f,
+                        direction >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE);
+
+                int action = actionPointer >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE;
+                Graphics.drawHud(buttonArt, rightX(), controlsY(), u * 0.26f, u * 0.26f, action);
+                Graphics.drawHud(handArt, rightX(), controlsY(), u * 0.13f, u * 0.13f, action);
+            } else if (mode == CUTSCENE) {
+                if (skipArt == null) {
+                    skipArt = art("button_wide");
+                }
+                Graphics.drawHud(skipArt, rightX(), controlsY(), u * SKIP_W, u * SKIP_W / 2, COLOR_IDLE);
+                bf.getData().setScale(scale);
+                g.setColor(COLOR_IDLE);
+                g.drawString("Skip", Math.round(rightX()), Math.round(controlsY()), Graphics.HCENTER | Graphics.VCENTER);
             }
-            if (touchDevice()) {
-                bf.getData().setScale(scale * 0.5f);
-                g.setColor(COLOR_LABEL);
-                float w = Gdx.graphics.getWidth();
-                g.drawString(Gdx.graphics.getFramesPerSecond() + " FPS", (int) (w * 0.04f), (int) (w * 0.09f),
-                        Graphics.LEFT | Graphics.VCENTER);
-            }
+            bf.getData().setScale(scale * 0.6f);
+            g.setColor(MenuTheme.COLOR_TEXT);
+            g.drawString(Gdx.graphics.getFramesPerSecond() + " FPS", (int) (u * 0.04f), (int) (u * 0.09f),
+                    Graphics.LEFT | Graphics.VCENTER);
         } finally {
             bf.getData().setScale(oldX, oldY);
             Graphics.endHud();

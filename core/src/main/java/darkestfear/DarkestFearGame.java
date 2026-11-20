@@ -23,7 +23,9 @@ public class DarkestFearGame extends ApplicationAdapter {
         Graphics.init();
         screen = new Graphics(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         J2meInput input = new J2meInput();
+        Gdx.input.setCatchKey(com.badlogic.gdx.Input.Keys.BACK, true);
         Gdx.input.setInputProcessor(new InputMultiplexer(new GestureDetector(input), input));
+        com.badlogic.gdx.controllers.Controllers.addListener(new GamepadInput());
 
         try {
             midlet = Class.forName("RMIDlet").getDeclaredConstructor().newInstance();

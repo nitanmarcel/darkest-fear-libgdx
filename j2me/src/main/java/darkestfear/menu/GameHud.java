@@ -18,15 +18,46 @@ public final class GameHud {
     private GameHud() {
     }
 
-    private static final int PAUSE_KEY = -6, CONTINUE_KEY = -5;
+    private static final int PAUSE_KEY = -6;
+    private static final int PAUSE_REACH = 10;
     private static int pauseX, pauseY;
+
+    private static final int ABILITIES_TEXT = 22;
+    private static final int HINT_DELAY = 30;
+    private static Object hintedLevel;
+    private static int hintFrames;
 
     public static void renderLevel(Graphics g) {
         if (GameBridge.inLevel()) {
             render(g, true);
-        } else if (GameBridge.inCutscene()) {
-            renderCaption(g);
+            startHint();
+        } else {
+            hintFrames = 0;
+            if (GameBridge.inCutscene()) {
+                renderCaption(g);
+            }
         }
+    }
+
+    private static void startHint() {
+        Object level = LightBridge.currentLevel();
+        if (LightBridge.levelIndex() != 0 || level == hintedLevel) {
+            hintFrames = 0;
+            return;
+        }
+        if (++hintFrames < HINT_DELAY) {
+            return;
+        }
+        hintedLevel = level;
+        hintFrames = 0;
+        String abilities = GameBridge.text(ABILITIES_TEXT).trim();
+        abilities = abilities.substring(abilities.lastIndexOf('\n') + 1).trim();
+        String controls = GameInput.gamepad ? "Move: stick or D-pad. Interact: A. Pause: Start."
+                : MenuOverlay.isDesktop() ? "Move: " + GameInput.keyName(GameInput.UP) + " " + GameInput.keyName(GameInput.LEFT)
+                        + " " + GameInput.keyName(GameInput.DOWN) + " " + GameInput.keyName(GameInput.RIGHT) + ". Interact: "
+                        + GameInput.keyName(GameInput.PRIMARY) + ". Pause: Esc."
+                : null;
+        LightBridge.showMessage(controls == null ? abilities : controls + "\n\n" + abilities);
     }
 
     private static void renderCaption(Graphics g) {
@@ -70,15 +101,19 @@ public final class GameHud {
     }
 
     public static boolean tap(int screenX, int screenY) {
-        if (GameBridge.popupLevel() != null) {
-            javax.microedition.lcdui.Canvas.dispatchKeyPressed(CONTINUE_KEY);
+        if (GameControls.justSkipped()) {
+            return true;
+        }
+        if (GameBridge.inPopup() || GameBridge.inDialog() || GameBridge.inCutscene()) {
+            GameInput.press(GameInput.PRIMARY);
+            GameInput.release(GameInput.PRIMARY);
             return true;
         }
         if (!GameBridge.inLevel()) {
             return false;
         }
         com.badlogic.gdx.math.Vector2 p = Graphics.toVirtual(screenX, screenY);
-        if (p.x >= pauseX - 4 && p.x < pauseX + ITEM_BOX + 4 && p.y >= pauseY - 4 && p.y < pauseY + ITEM_BOX + 4) {
+        if (p.x >= pauseX - PAUSE_REACH && p.y >= pauseY - PAUSE_REACH && p.y < H) {
             javax.microedition.lcdui.Canvas.dispatchKeyPressed(PAUSE_KEY);
             return true;
         }
@@ -171,14 +206,17 @@ public final class GameHud {
             first = 1;
         }
         StringBuilder text = new StringBuilder();
+        boolean paragraph = false;
         for (int i = first; i < raw.length; i++) {
             String line = raw[i].trim();
             if (line.isEmpty()) {
+                paragraph = text.length() > 0;
                 continue;
             }
             if (text.length() > 0) {
-                text.append(' ');
+                text.append(paragraph ? "\n\n" : " ");
             }
+            paragraph = false;
             text.append(line);
         }
 

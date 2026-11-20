@@ -23,6 +23,10 @@ final class SettingsMenu {
         boolean ok();
     }
 
+    private interface Text {
+        String get();
+    }
+
     private static final class Setting {
         final String section;
         final String label;
@@ -32,6 +36,7 @@ final class SettingsMenu {
         final String help;
         Check available;
         String unavailableHelp;
+        Text shown;
 
         Setting(String section, String label, String[] values, Getter getter, Setter setter, String help) {
             this.section = section;
@@ -73,6 +78,7 @@ final class SettingsMenu {
     private static final int TEXT_DROP = MenuTheme.TEXT_DROP;
 
     private static Setting[] settings;
+    private static boolean listedGamepad;
     private static int[] rowY;
     private static int contentHeight;
     private static int selected;
@@ -82,9 +88,12 @@ final class SettingsMenu {
     }
 
     private static Setting[] settings() {
-        if (settings != null) {
+        if (settings != null && listedGamepad == GameInput.gamepad) {
             return settings;
         }
+        listedGamepad = GameInput.gamepad;
+        selected = 0;
+        scrollY = 0;
         List<Setting> list = new ArrayList<>();
         list.add(new Setting("Graphics", "Lighting", new String[] {"Original", "Enhanced"},
                 () -> Graphics.isLightingEnabled() ? 1 : 0, v -> Graphics.setLightingEnabled(v == 1),
@@ -100,6 +109,27 @@ final class SettingsMenu {
             list.add(new Setting("Display", "Fullscreen", OFF_ON,
                     () -> Gdx.graphics.isFullscreen() ? 1 : 0, v -> MenuOverlay.toggleFullscreen(),
                     "Switch between a window and the whole screen."));
+        }
+        if (MenuOverlay.isDesktop()) {
+            String[] names = {"Move up", "Move down", "Move left", "Move right", "Interact", "Pause / back"};
+            for (int i = 0; i < names.length; i++) {
+                int action = i;
+                Setting key = new Setting("Controls", names[i], null, null, v -> GameInput.capture(action),
+                        "Choose this and press the new key. Arrows, Enter, Space and Esc always work as well.");
+                key.shown = () -> GameInput.capturing(action) ? "Press a key" : GameInput.keyName(action);
+                list.add(key);
+            }
+            list.add(new Setting("Controls", "Reset keys", null, null, v -> GameInput.resetKeys(),
+                    "Puts every key back to its default."));
+        }
+        if (GameInput.gamepad) {
+            String[][] pad = {{"Move", "Stick / D-pad"}, {"Interact", "A"}, {"Pause / back", "B / Start"}};
+            for (String[] row : pad) {
+                Setting button = new Setting("Gamepad", row[0], null, null, v -> { },
+                        "Gamepad buttons are fixed for now.");
+                button.shown = () -> row[1];
+                list.add(button);
+            }
         }
         list.add(new Setting("Audio", "Sound", OFF_ON,
                 () -> GameBridge.soundEnabled() ? 1 : 0, v -> GameBridge.setSoundEnabled(v == 1),
@@ -122,6 +152,7 @@ final class SettingsMenu {
     }
 
     static void opened() {
+        GameInput.stopCapture();
         selected = 0;
         scrollY = 0;
     }
@@ -161,18 +192,17 @@ final class SettingsMenu {
             g.setColor(!usable ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_ITEM);
             g.drawString(s.label, TEXT_X + 2, y + textPad, top | Graphics.LEFT);
             int right = W - TEXT_X;
-            boolean arrows = on && usable;
+            boolean arrows = on && usable && s.values != null;
             if (arrows) {
                 MenuTheme.chevron(g, right - 4, y + ROW_H / 2, false);
                 right -= 10;
             }
-            if (s.values != null) {
-                String value = s.values[s.getter.get()];
+            if (s.values != null || s.shown != null) {
+                String value = s.values != null ? s.values[s.getter.get()] : s.shown.get();
                 g.setFont(on ? bold : plain);
                 g.setColor(!usable ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_VALUE);
                 g.drawString(value, right, y + textPad, top | Graphics.RIGHT);
                 if (arrows) {
-                    g.setFont(bold);
                     MenuTheme.chevron(g, right - bold.stringWidth(value) - 10, y + ROW_H / 2, true);
                 }
             }
@@ -198,19 +228,15 @@ final class SettingsMenu {
         Setting[] all = settings();
         switch (code) {
             case Keys.UP:
-            case Keys.W:
                 select((selected - 1 + all.length) % all.length);
                 break;
             case Keys.DOWN:
-            case Keys.S:
                 select((selected + 1) % all.length);
                 break;
             case Keys.LEFT:
-            case Keys.A:
                 change(-1);
                 break;
             case Keys.RIGHT:
-            case Keys.D:
             case -5:
             case -6:
             case Keys.ENTER:
@@ -228,6 +254,7 @@ final class SettingsMenu {
     }
 
     private static void select(int index) {
+        GameInput.stopCapture();
         selected = index;
         int view = listBottom - listTop;
         int topEdge = rowY[index] - (index == 0 || !settings[index].section.equals(settings[index - 1].section) ? SECTION_H : 0);
@@ -284,7 +311,8 @@ final class SettingsMenu {
     static void hover(float vx, float vy) {
         settings();
         int row = rowAt(vx, vy);
-        if (row != -1) {
+        if (row != -1 && row != selected) {
+            GameInput.stopCapture();
             selected = row;
         }
     }

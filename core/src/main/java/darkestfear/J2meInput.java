@@ -5,12 +5,27 @@ import com.badlogic.gdx.InputAdapter;
 import com.badlogic.gdx.input.GestureDetector.GestureListener;
 import com.badlogic.gdx.math.Vector2;
 
+import darkestfear.menu.GameInput;
+
 import javax.microedition.lcdui.Canvas;
 
 public class J2meInput extends InputAdapter implements GestureListener {
 
-    @Override public boolean keyDown(int k) { Canvas.dispatchKeyPressed(toJ2me(k)); return true; }
-    @Override public boolean keyUp(int k)   { Canvas.dispatchKeyReleased(toJ2me(k)); return true; }
+    @Override
+    public boolean keyDown(int k) {
+        if (!GameInput.keyDown(k)) {
+            Canvas.dispatchKeyPressed(phoneKey(k));
+        }
+        return true;
+    }
+
+    @Override
+    public boolean keyUp(int k) {
+        if (!GameInput.keyUp(k)) {
+            Canvas.dispatchKeyReleased(phoneKey(k));
+        }
+        return true;
+    }
     @Override public boolean scrolled(float amountX, float amountY) { Canvas.dispatchScroll(Math.round(amountY)); return true; }
     @Override public boolean mouseMoved(int x, int y) { Canvas.dispatchHover(x, y); return false; }
 
@@ -25,24 +40,7 @@ public class J2meInput extends InputAdapter implements GestureListener {
     @Override public boolean pinch(Vector2 a, Vector2 b, Vector2 c, Vector2 d) { return false; }
     @Override public void pinchStop() { }
 
-    private int toJ2me(int k) {
-        switch (k) {
-            case Keys.NUM_0: return 48;
-            case Keys.NUM_1: return 49;
-            case Keys.NUM_2: return 50;
-            case Keys.NUM_3: return 51;
-            case Keys.NUM_4: return 52;
-            case Keys.NUM_5: return 53;
-            case Keys.NUM_6: return 54;
-            case Keys.NUM_7: return 55;
-            case Keys.NUM_8: return 56;
-            case Keys.NUM_9: return 57;
-            case Keys.Q: return -6;
-            case Keys.E: return -7;
-            case Keys.ENTER:
-            case Keys.SPACE:
-                return -5;
-            default: return k;
-        }
+    private static int phoneKey(int k) {
+        return k >= Keys.NUM_0 && k <= Keys.NUM_9 ? '0' + k - Keys.NUM_0 : k;
     }
 }

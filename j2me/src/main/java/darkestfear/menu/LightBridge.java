@@ -826,6 +826,19 @@ public final class LightBridge {
         }
     }
 
+    static void showMessage(String text) {
+        Object level = currentLevel();
+        if (level == null) {
+            return;
+        }
+        try {
+            Method show = levelCls.getDeclaredMethod("b", String.class, int.class);
+            show.setAccessible(true);
+            show.invoke(level, text, -1);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static int levelIndex() {
         Object level = fLevelIndex == null ? null : currentLevel();
         if (level == null) {

@@ -96,7 +96,7 @@ public class Graphics {
         OrthographicCamera cam = new OrthographicCamera();
         viewport = new FitViewport(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, cam);
         cam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
-        viewport.update(Gdx.graphics.getWidth(), Gdx.graphics.getHeight(), false);
+        resized(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
         gameFbo = new FrameBuffer(Pixmap.Format.RGBA8888, FBO_W, FBO_H, false);
         gameFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
@@ -131,7 +131,15 @@ public class Graphics {
     }
 
     public static void resized(int width, int height) {
-        if (viewport != null) viewport.update(width, height, false);
+        if (viewport == null) return;
+        viewport.update(width, height, false);
+        if (Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.Android) {
+            viewport.setScreenY(Math.max(0, height - viewport.getScreenHeight() - Gdx.graphics.getSafeInsetTop()));
+        }
+    }
+
+    public static int gameBottom() {
+        return Gdx.graphics.getHeight() - viewport.getScreenY();
     }
 
     private static OrthographicCamera hudCam;
@@ -149,6 +157,12 @@ public class Graphics {
 
     public static void endHud() {
         batch.end();
+    }
+
+    public static void drawHud(Texture texture, float centerX, float centerY, float width, float height, int rgb) {
+        batch.setColor(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
+        batch.draw(texture, centerX - width / 2, centerY - height / 2, width, height, 0, 0, texture.getWidth(),
+                texture.getHeight(), false, true);
     }
 
     public static void dispose() {

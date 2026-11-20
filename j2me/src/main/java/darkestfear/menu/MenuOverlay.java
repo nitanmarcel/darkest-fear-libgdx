@@ -16,24 +16,11 @@ public final class MenuOverlay {
 
     private static final int MENU_MAIN = 0;
     private static final int MENU_SETTINGS = 2;
-    private static final int MENU_HELP = 3;
 
-    private static final String HELP_TEXT =
-            "Controls:\n"
-            + "Move - Arrow keys or 2,4,6,8\n"
-            + "Interact / pick up - Enter or Space\n"
-            + "Pause - Q\n"
-            + "Menus - mouse, arrows, Enter to choose, Esc to go back\n"
-            + "\n"
-            + "Thomas is able to - open windows, light fireplaces, carry light sources, "
-            + "carry mirrors, move boxes, open doors and interact with other characters.";
-
-    private static String[] helpLines;
 
     private static final int ACT_CONTINUE = 0;
     private static final int ACT_NEW_GAME = 1;
     private static final int ACT_SETTINGS = 2;
-    private static final int ACT_HELP = 3;
     private static final int ACT_ABOUT = 4;
     private static final int ACT_EXIT = 5;
 
@@ -157,8 +144,6 @@ public final class MenuOverlay {
             switch (code) {
                 case Keys.LEFT:
                 case Keys.RIGHT:
-                case Keys.A:
-                case Keys.D:
                 case Keys.TAB:
                     cardFocus = 1 - cardFocus;
                     return true;
@@ -196,11 +181,9 @@ public final class MenuOverlay {
         }
         switch (code) {
             case Keys.UP:
-            case Keys.W:
                 selected = (selected - 1 + n) % n;
                 return true;
             case Keys.DOWN:
-            case Keys.S:
                 selected = (selected + 1) % n;
                 return true;
             case -5:
@@ -283,8 +266,7 @@ public final class MenuOverlay {
         for (int i = 0; i < count; i++) {
             boolean selectable = GameBridge.menuItemType(menu, i) != 0;
             textOnly &= !selectable;
-            lines[i] = menuId == MENU_HELP && i == 0 ? helpLines(plain)
-                    : selectable ? GameBridge.menuItemLines(menu, i) : wrapText(plain, join(GameBridge.menuItemLines(menu, i)), W - 2 * MenuTheme.TEXT_X);
+            lines[i] = selectable ? GameBridge.menuItemLines(menu, i) : wrapText(plain, join(GameBridge.menuItemLines(menu, i)), W - 2 * MenuTheme.TEXT_X);
             textLines += lines[i].length;
         }
         boolean question = textOnly && left != null && !left.isEmpty() && right != null && !right.isEmpty();
@@ -541,13 +523,6 @@ public final class MenuOverlay {
         return -1;
     }
 
-    private static String[] helpLines(Font font) {
-        if (helpLines == null) {
-            helpLines = wrapText(font, HELP_TEXT, LIST_W);
-        }
-        return helpLines;
-    }
-
     static String[] wrapText(Font font, String text, int maxWidth) {
         List<String> out = new ArrayList<>();
         for (String paragraph : text.split("\n", -1)) {
@@ -590,9 +565,6 @@ public final class MenuOverlay {
             case ACT_SETTINGS:
                 GameBridge.openMenu(2);
                 break;
-            case ACT_HELP:
-                GameBridge.openMenu(3);
-                break;
             case ACT_ABOUT:
                 GameBridge.openMenu(4);
                 break;
@@ -629,7 +601,6 @@ public final class MenuOverlay {
         }
         add(ls, as, textOr(2, "New Game"), ACT_NEW_GAME);
         add(ls, as, textOr(4, "Settings"), ACT_SETTINGS);
-        add(ls, as, textOr(5, "Help"), ACT_HELP);
         add(ls, as, textOr(6, "About"), ACT_ABOUT);
         add(ls, as, textOr(7, "Exit"), ACT_EXIT);
 
