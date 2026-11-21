@@ -57,16 +57,21 @@ public abstract class Canvas extends Displayable {
         boolean preview = MenuOverlay.showsGame();
         Object boxed = GameBridge.popupLevel();
         boolean litScene = (preview || !MenuOverlay.active()) && !GameBridge.inCutscene();
+        Graphics.fogWanted = boxed != null || (!MenuOverlay.active() && GameBridge.inLevel());
+        Graphics.levelShown = Graphics.fogWanted || preview;
         if (litScene) {
             Graphics.prepareLightmap();
         }
+        boolean wideMenu = MenuOverlay.active() && Graphics.wide();
         g.begin();
         try {
             if (MenuOverlay.active()) {
                 if (preview) {
                     darkestfear.menu.LightBridge.renderPausedLevel(g);
                 }
-                MenuOverlay.render(g);
+                if (!wideMenu) {
+                    MenuOverlay.render(g);
+                }
             } else if (boxed != null) {
                 darkestfear.menu.LightBridge.renderLevel(boxed, g);
                 darkestfear.menu.GameHud.renderBox(g);
@@ -92,12 +97,26 @@ public abstract class Canvas extends Displayable {
             }
         }
         Graphics.present();
+        boolean wideHud = !MenuOverlay.active() && Graphics.wide() && (boxed != null || GameBridge.inLevel());
+        if (wideMenu || wideHud) {
+            Graphics.beginWide();
+            try {
+                if (wideMenu) {
+                    MenuOverlay.renderWide(g);
+                } else {
+                    darkestfear.menu.GameHud.renderWide(g, boxed != null);
+                }
+            } finally {
+                Graphics.endWide();
+            }
+        }
         if (GameControls.active()) {
             GameControls.poll();
             GameControls.renderHud(g);
         } else {
             GameControls.reset();
         }
+        darkestfear.menu.LightBridge.syncView();
         synchronized (FRAME_LOCK) {
             frameCount++;
             FRAME_LOCK.notifyAll();

@@ -17,11 +17,13 @@ import com.badlogic.gdx.graphics.glutils.HdpiUtils;
 
 public class Graphics {
 
-    public static final int VIRTUAL_WIDTH = 240;
-    public static final int VIRTUAL_HEIGHT = 320;
+    public static final int CLASSIC_WIDTH = 240;
+    public static final int CLASSIC_HEIGHT = 320;
+    public static int VIRTUAL_WIDTH = CLASSIC_WIDTH;
+    public static int VIRTUAL_HEIGHT = CLASSIC_HEIGHT;
     public static final int RENDER_SCALE = 4;
-    public static final int FBO_W = VIRTUAL_WIDTH * RENDER_SCALE;
-    public static final int FBO_H = VIRTUAL_HEIGHT * RENDER_SCALE;
+    public static int FBO_W = VIRTUAL_WIDTH * RENDER_SCALE;
+    public static int FBO_H = VIRTUAL_HEIGHT * RENDER_SCALE;
 
     public static final int DIMMED = 0x100;
     public static final int HCENTER = 1, VCENTER = 2, LEFT = 4, RIGHT = 8, TOP = 16, BOTTOM = 32, BASELINE = 64;
@@ -40,6 +42,11 @@ public class Graphics {
 
     static ShaderProgram sceneLightShader;
     static ShaderProgram objectLightShader;
+    private static ShaderProgram fogShader;
+    private static float fogTime;
+    private static float fogAmount;
+    static boolean fogWanted;
+    private static final com.badlogic.gdx.math.Matrix4 fogProjection = new com.badlogic.gdx.math.Matrix4();
 
     static final int TILE = 16;
     private static final String LIGHT_STORE = "df_light";
@@ -94,18 +101,12 @@ public class Graphics {
         pm.dispose();
 
         OrthographicCamera cam = new OrthographicCamera();
-        viewport = new FitViewport(VIRTUAL_WIDTH, VIRTUAL_HEIGHT, cam);
-        cam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+        viewport = new FitViewport(CLASSIC_WIDTH, CLASSIC_HEIGHT, cam);
+        cam.setToOrtho(true, CLASSIC_WIDTH, CLASSIC_HEIGHT);
         resized(Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
 
-        gameFbo = new FrameBuffer(Pixmap.Format.RGBA8888, FBO_W, FBO_H, false);
-        gameFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         gameCam = new OrthographicCamera();
-        gameCam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
-        gameFbo.begin();
-        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
-        gameFbo.end();
+        createGameTarget();
 
         ShaderProgram.pedantic = false;
         LightEngine.lightShader = loadShader("post", "light");
@@ -113,9 +114,96 @@ public class Graphics {
         LightEngine.kawaseUpShader = loadShader("post", "kawase_up");
         sceneLightShader = loadShader("scenelight", "scenelight");
         objectLightShader = loadShader("objectlight", "objectlight");
+        fogShader = loadShader("post", "fog");
         lightingEnabled = loadFlag(LIGHT_STORE, true);
         cuesEnabled = loadFlag(CUES_STORE, true);
         upscaleEnabled = loadFlag(UPSCALE_STORE, true);
+        expandedView = loadFlag(VIEW_STORE, true);
+        boolean phone = Gdx.app.getType() == com.badlogic.gdx.Application.ApplicationType.Android;
+        zoom = loadFlag(ZOOM_CLOSER_STORE, phone) ? 2 : loadFlag(ZOOM_STORE, true) ? 1 : 0;
+    }
+
+    private static void createGameTarget() {
+        gameFbo = new FrameBuffer(Pixmap.Format.RGBA8888, FBO_W, FBO_H, false);
+        gameFbo.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+        gameCam.setToOrtho(true, VIRTUAL_WIDTH, VIRTUAL_HEIGHT);
+        gameFbo.begin();
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        gameFbo.end();
+    }
+
+    public static void resizeScene(int width, int height) {
+        if (width == VIRTUAL_WIDTH && height == VIRTUAL_HEIGHT) {
+            return;
+        }
+        VIRTUAL_WIDTH = width;
+        VIRTUAL_HEIGHT = height;
+        FBO_W = width * RENDER_SCALE;
+        FBO_H = height * RENDER_SCALE;
+        gameFbo.dispose();
+        createGameTarget();
+        SceneCompositor.dispose();
+        LightEngine.resize();
+    }
+
+    private static final String VIEW_STORE = "df_view";
+    private static boolean expandedView = true;
+    private static final String ZOOM_STORE = "df_zoom", ZOOM_CLOSER_STORE = "df_zoom_closer";
+    private static int zoom = 1;
+
+    public static int zoom() {
+        return zoom;
+    }
+
+    public static void setZoom(int steps) {
+        zoom = steps;
+        saveFlag(ZOOM_STORE, steps >= 1);
+        saveFlag(ZOOM_CLOSER_STORE, steps >= 2);
+    }
+    static boolean levelShown;
+    private static float sceneX, sceneY, sceneW, sceneH;
+
+    private static float sceneUnit() {
+        float unit = wideUnit();
+        if (!expandedView) {
+            return unit;
+        }
+        float density = Gdx.graphics.getBackBufferWidth() / (float) Gdx.graphics.getWidth();
+        return (Math.max(1f, (float) Math.floor(unit * density)) + zoom) / density;
+    }
+
+    public static int sceneRoomWidth() {
+        return (int) (Gdx.graphics.getWidth() / sceneUnit());
+    }
+
+    public static int sceneRoomHeight() {
+        return (int) (Gdx.graphics.getHeight() / sceneUnit());
+    }
+
+    public static int sceneWidth() {
+        return Math.round(sceneW);
+    }
+
+    public static int sceneHeight() {
+        return Math.round(sceneH);
+    }
+
+    public static boolean isExpandedView() {
+        return expandedView;
+    }
+
+    public static void setExpandedView(boolean enabled) {
+        expandedView = enabled;
+        saveFlag(VIEW_STORE, enabled);
+    }
+
+    public static int sceneX() {
+        return Math.round(sceneX);
+    }
+
+    public static int sceneY() {
+        return Math.round(sceneY);
     }
 
     static ShaderProgram loadShader(String vert, String frag) {
@@ -159,8 +247,98 @@ public class Graphics {
         batch.end();
     }
 
+    private static final int WIDE_MIN = 400;
+    private static final float REGION_INSET = 0.02f;
+
+    public static int wideInsetLeft() {
+        return (int) Math.ceil(Gdx.graphics.getSafeInsetLeft() / wideUnit());
+    }
+
+    public static int wideInsetRight() {
+        return (int) Math.ceil(Gdx.graphics.getSafeInsetRight() / wideUnit());
+    }
+    private static final com.badlogic.gdx.math.Matrix4 wideProjection = new com.badlogic.gdx.math.Matrix4();
+    private static final com.badlogic.gdx.math.Matrix4 wideTransform = new com.badlogic.gdx.math.Matrix4();
+    private static boolean wideActive;
+    private static float wideX, wideY;
+
+    private static float wideUnit() {
+        return viewport.getScreenHeight() / (float) CLASSIC_HEIGHT;
+    }
+
+    public static int wideWidth() {
+        return (int) (Gdx.graphics.getWidth() / wideUnit());
+    }
+
+    public static boolean wide() {
+        return wideWidth() >= WIDE_MIN;
+    }
+
+    public static void beginWide() {
+        int w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
+        float unit = wideUnit();
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        HdpiUtils.glViewport(0, 0, w, h);
+        batch.setProjectionMatrix(wideProjection.setToOrtho(0, w / unit, h / unit, 0, 0, 1));
+        batch.setShader(null);
+        wideActive = true;
+        batch.begin();
+        wideOrigin(0, 0);
+    }
+
+    public static void wideOrigin(float x, float y) {
+        wideX = x;
+        wideY = y;
+        batch.setTransformMatrix(wideTransform.setToTranslation(x, y, 0));
+    }
+
+    public static void endWide() {
+        batch.end();
+        batch.setTransformMatrix(wideTransform.idt());
+        wideActive = false;
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+    }
+
+    public static com.badlogic.gdx.math.Vector2 toWide(int screenX, int screenY) {
+        float unit = wideUnit();
+        return new com.badlogic.gdx.math.Vector2(screenX / unit, screenY / unit);
+    }
+
+    public static void dim(int x, int y, int width, int height, float amount) {
+        batch.setColor(0f, 0f, 0f, amount);
+        batch.draw(white, x, y, width, height);
+        batch.setColor(Color.WHITE);
+    }
+
+    public static int sceneScrollX() {
+        return Math.round(LightEngine.scrollX());
+    }
+
+    public static int sceneScrollY() {
+        return Math.round(LightEngine.scrollY());
+    }
+
+    public static void drawGame(int srcX, int srcY, int width, int height, int x, int y) {
+        Texture tex = gameFbo.getColorBufferTexture();
+        int s = RENDER_SCALE;
+        batch.setColor(Color.WHITE);
+        batch.draw(tex, x, y, width, height, srcX * s, tex.getHeight() - (srcY + height) * s, width * s, height * s,
+                false, false);
+    }
+
+    public void drawRegionScaled(Image src, int xSrc, int ySrc, int width, int height, int x, int y, int w, int h) {
+        batch.setColor(Color.WHITE);
+        batch.draw(src.texture(), x, y, w, h, xSrc, ySrc, width, height, false, true);
+        batch.setColor(color);
+    }
+
     public static void drawHud(Texture texture, float centerX, float centerY, float width, float height, int rgb) {
-        batch.setColor(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, 1f);
+        drawHud(texture, centerX, centerY, width, height, rgb, 1f);
+    }
+
+    public static void drawHud(Texture texture, float centerX, float centerY, float width, float height, int rgb,
+                               float alpha) {
+        batch.setColor(((rgb >> 16) & 0xFF) / 255f, ((rgb >> 8) & 0xFF) / 255f, (rgb & 0xFF) / 255f, alpha);
         batch.draw(texture, centerX - width / 2, centerY - height / 2, width, height, 0, 0, texture.getWidth(),
                 texture.getHeight(), false, true);
     }
@@ -170,6 +348,7 @@ public class Graphics {
         if (white != null) white.dispose();
         if (gameFbo != null) gameFbo.dispose();
         if (sceneLightShader != null) sceneLightShader.dispose();
+        if (fogShader != null) fogShader.dispose();
         if (objectLightShader != null) objectLightShader.dispose();
         SceneCompositor.dispose();
         LightEngine.dispose();
@@ -291,16 +470,77 @@ public class Graphics {
 
         Texture tex = gameFbo.getColorBufferTexture();
 
-        viewport.apply();
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
         tex.setFilter(Texture.TextureFilter.Linear, Texture.TextureFilter.Linear);
-
-        batch.setProjectionMatrix(viewport.getCamera().combined);
+        boolean cropped = levelShown && wide();
         batch.setShader(null);
+        if (cropped) {
+            int w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
+            float unit = wideUnit(), zoom = sceneUnit();
+            int play = Math.min(playAreaH, VIRTUAL_HEIGHT);
+            sceneW = VIRTUAL_WIDTH * zoom / unit;
+            sceneH = play * zoom / unit;
+            sceneX = (w / unit - sceneW) / 2f;
+            sceneY = (h / unit - sceneH) / 2f;
+            HdpiUtils.glViewport(0, 0, w, h);
+            batch.setProjectionMatrix(wideProjection.setToOrtho(0, w / unit, h / unit, 0, 0, 1));
+            batch.begin();
+            batch.setColor(Color.WHITE);
+            batch.draw(tex, sceneX, sceneY, sceneW, sceneH, 0, tex.getHeight() - play * RENDER_SCALE,
+                    tex.getWidth(), play * RENDER_SCALE, false, false);
+            batch.end();
+            drawFog(tex, sceneX * unit, sceneY * unit, sceneW * unit, sceneH * unit, zoom, true);
+        } else {
+            viewport.apply();
+            batch.setProjectionMatrix(viewport.getCamera().combined);
+            batch.begin();
+            batch.setColor(Color.WHITE);
+            batch.draw(tex, 0, 0, CLASSIC_WIDTH, CLASSIC_HEIGHT, 0, 0, tex.getWidth(), tex.getHeight(), false, false);
+            batch.end();
+            float unit = viewport.getScreenWidth() / (float) CLASSIC_WIDTH;
+            float strip = (CLASSIC_HEIGHT - Math.min(playAreaH, CLASSIC_HEIGHT)) * unit;
+            drawFog(tex, viewport.getScreenX(), Gdx.graphics.getHeight() - viewport.getScreenY() - viewport.getScreenHeight(),
+                    viewport.getScreenWidth(), viewport.getScreenHeight() - strip, unit, false);
+        }
+    }
+
+    private static final float FOG_FADE_SECONDS = 0.6f;
+    private static final float FOG_SIDE_MIN = 40f;
+    private static final float EDGE_LIGHT_REACH = 30f;
+    private static final float[] edgeSides = new float[4];
+
+    static void setEdgeUniforms(ShaderProgram shader) {
+        shader.setUniformf("u_edge", edgeSides[0], edgeSides[1], edgeSides[2], edgeSides[3]);
+        shader.setUniformf("u_edgeArea", VIRTUAL_WIDTH, Math.min(playAreaH, VIRTUAL_HEIGHT), EDGE_LIGHT_REACH);
+    }
+
+    private static void drawFog(Texture tex, float x, float top, float width, float height, float unit, boolean bottom) {
+        int w = Gdx.graphics.getWidth(), h = Gdx.graphics.getHeight();
+        float dt = Gdx.graphics.getDeltaTime();
+        float room = FOG_SIDE_MIN * unit;
+        edgeSides[0] = x >= room ? 1f : 0f;
+        edgeSides[1] = w - x - width >= room ? 1f : 0f;
+        edgeSides[2] = top >= room ? 1f : 0f;
+        edgeSides[3] = bottom && h - top - height >= room ? 1f : 0f;
+        fogAmount = Math.max(0f, Math.min(1f, fogAmount + (fogWanted ? dt : -dt) / FOG_FADE_SECONDS));
+        if (fogShader == null || fogAmount <= 0f || (width >= w && height >= h)) {
+            return;
+        }
+        fogTime += dt;
+        float scale = Gdx.graphics.getBackBufferWidth() / (float) w;
+        HdpiUtils.glViewport(0, 0, w, h);
+        batch.setProjectionMatrix(fogProjection.setToOrtho2D(0, 0, w, h));
+        batch.setShader(fogShader);
         batch.begin();
         batch.setColor(Color.WHITE);
-        batch.draw(tex, 0, 0, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0, 0, tex.getWidth(), tex.getHeight(), false, false);
+        fogShader.setUniformf("u_scene", x * scale, (h - top - height) * scale, width * scale, height * scale);
+        fogShader.setUniformf("u_sides", edgeSides[0], edgeSides[1], edgeSides[2], edgeSides[3]);
+        fogShader.setUniformf("u_unit", unit * scale);
+        fogShader.setUniformf("u_time", fogTime);
+        fogShader.setUniformf("u_amount", fogAmount);
+        batch.draw(tex, 0, 0, w, h);
         batch.end();
+        batch.setShader(null);
     }
 
     public void setColor(int rgb) {
@@ -395,13 +635,20 @@ public class Graphics {
         SceneCompositor.setBand(SceneCompositor.FX);
         float shade = transform == DIMMED ? 0.28f : 1f;
         batch.setColor(shade, shade, shade, 1f);
-        batch.draw(src.texture(), x, y, width, height, xSrc, ySrc, width, height, false, true);
+        if (wideActive) {
+            Texture tex = src.texture();
+            float iw = 1f / tex.getWidth(), ih = 1f / tex.getHeight();
+            batch.draw(tex, x, y, width, height, (xSrc + REGION_INSET) * iw, (ySrc + REGION_INSET) * ih,
+                    (xSrc + width - REGION_INSET) * iw, (ySrc + height - REGION_INSET) * ih);
+        } else {
+            batch.draw(src.texture(), x, y, width, height, xSrc, ySrc, width, height, false, true);
+        }
         batch.setColor(color);
     }
 
     public void drawString(String str, int x, int y, int anchor) {
         if (textMuted || target != null || font == null || str == null || str.isEmpty()) return;
-        try {
+        synchronized (Font.TEXT_LOCK) {
             layout.setText(font, str);
             x = anchorX(x, (int) layout.width, anchor);
             if ((anchor & BOTTOM) != 0)       y -= (int) layout.height;
@@ -409,7 +656,6 @@ public class Graphics {
             font.setColor(color);
             SceneCompositor.setBand(SceneCompositor.FX);
             font.draw(batch, str, x, y);
-        } catch (ArrayIndexOutOfBoundsException ignored) {
         }
     }
 
@@ -424,6 +670,15 @@ public class Graphics {
             int s = RENDER_SCALE;
             Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
             Gdx.gl.glScissor(x * s, FBO_H - (y + height) * s, width * s, height * s);
+            return;
+        }
+
+        if (wideActive) {
+            float unit = wideUnit();
+            Gdx.gl.glEnable(GL20.GL_SCISSOR_TEST);
+            HdpiUtils.glScissor(Math.round((x + wideX) * unit),
+                    Gdx.graphics.getHeight() - Math.round((y + wideY + height) * unit),
+                    Math.round(width * unit), Math.round(height * unit));
             return;
         }
 

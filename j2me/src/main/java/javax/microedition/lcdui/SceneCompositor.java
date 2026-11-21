@@ -175,6 +175,7 @@ final class SceneCompositor {
         sh.setUniformi("u_shape", 3);
         sh.setUniformf("u_shapeLight", SHAPE_LIFT, SHAPE_EDGE, SHAPE_EDGE_WIDTH / SpriteUpscaler.SHAPE_RANGE);
         boundShape = null;
+        Graphics.setEdgeUniforms(sh);
         dimBody = Graphics.cuesEnabled ? PERSON_BODY : 0f;
         sh.setUniformf("u_dangerBody", dimBody);
         if (lit) {
@@ -681,7 +682,7 @@ final class SceneCompositor {
     private static float pack(int sx, int sy, int cls, int along) {
         int qx = Math.max(0, Math.min(Graphics.VIRTUAL_WIDTH - 1, sx));
         int qy = Math.max(0, Math.min(Graphics.VIRTUAL_HEIGHT - 1, sy));
-        return Color.toFloatBits(qx, qy & 255, cls * 32 + (qy >> 8) * 4 + along, 255);
+        return Color.toFloatBits(qx & 255, qy & 255, cls * 32 + ((qx >> 8) * 2 + (qy >> 8)) * 4 + along, 255);
     }
 
     static void composite(FrameBuffer target) {
@@ -739,6 +740,7 @@ final class SceneCompositor {
                 floorShader.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
                 floorShader.setUniformf("u_mapTiles", LightEngine.mapCols(), LightEngine.mapRows());
                 floorShader.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+                Graphics.setEdgeUniforms(floorShader);
                 floorShader.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
                 floorShader.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);
                 floorShader.setUniformf("u_debug", debug ? 1f : 0f);

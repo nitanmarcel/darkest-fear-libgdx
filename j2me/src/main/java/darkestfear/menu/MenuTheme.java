@@ -19,8 +19,8 @@ final class MenuTheme {
     static final int COLOR_RULE = 0x282828;
     static final int COLOR_BUTTON = 0x222222;
 
-    static final int W = Graphics.VIRTUAL_WIDTH;
-    static final int H = Graphics.VIRTUAL_HEIGHT;
+    static final int W = Graphics.CLASSIC_WIDTH;
+    static final int H = Graphics.CLASSIC_HEIGHT;
     static final int MARGIN = 8;
     static final int TEXT_X = 16;
     static final int TITLE_Y = 12;
@@ -47,6 +47,10 @@ final class MenuTheme {
     static final int BACK_W = 14;
 
     static void header(Graphics g, String title, boolean back) {
+        header(g, title, back, W);
+    }
+
+    static void header(Graphics g, String title, boolean back, int width) {
         g.setFont(titleFont());
         g.setColor(COLOR_TITLE);
         if (back) {
@@ -54,7 +58,7 @@ final class MenuTheme {
         }
         g.drawString(title, TEXT_X + (back ? BACK_W : 0), TITLE_Y, Graphics.TOP | Graphics.LEFT);
         g.setColor(COLOR_BAR);
-        g.fillRect(MARGIN, RULE_Y, W - 2 * MARGIN, 1);
+        g.fillRect(MARGIN, RULE_Y, width - 2 * MARGIN, 1);
     }
 
     static void panelHeader(Graphics g, String title, int top) {

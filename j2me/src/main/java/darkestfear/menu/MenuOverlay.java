@@ -64,8 +64,14 @@ public final class MenuOverlay {
         return menuId == MENU_MAIN || menuId == MENU_SETTINGS;
     }
 
+    private static boolean isQuestion(int menuId) {
+        return menuId == 5 || menuId == 7 || menuId == 9 || menuId == 10;
+    }
+
     public static boolean showsGame() {
-        return GameBridge.currentMenuId() == MENU_SETTINGS && LightBridge.pausedLevel() != null;
+        int menuId = GameBridge.currentMenuId();
+        return (menuId == MENU_SETTINGS || ((menuId == MENU_MAIN || isQuestion(menuId)) && Graphics.wide()))
+                && LightBridge.pausedLevel() != null;
     }
 
     public static void keepSplash() {
@@ -98,10 +104,51 @@ public final class MenuOverlay {
         }
     }
 
+    private static final int TITLE_GAP = 30;
+    private static final int PAUSE_HEAD = 38;
+    private static final float PAUSE_DIM = 0.62f;
+    private static final int TITLE_LIST_MIN = 180;
+    private static final int TITLE_SIDE = 16;
+    private static boolean wideDrawn;
+    private static float originX;
+
+    public static void renderWide(Graphics g) {
+        int wide = Graphics.wideWidth();
+        wideDrawn = true;
+        boolean settings = GameBridge.currentMenuId() == MENU_SETTINGS;
+        if (settings || !showsGame()) {
+            g.setClip(0, 0, wide, H);
+            g.setColor(isCustom(GameBridge.currentMenuId()) ? 0 : MenuTheme.COLOR_BG);
+            g.fillRect(0, 0, wide, H);
+        }
+        if (!settings && showsGame() && isQuestion(GameBridge.currentMenuId())) {
+            g.setClip(0, 0, wide, H);
+            Graphics.dim(0, 0, wide, H, PAUSE_DIM);
+        }
+        int pane = settings ? Math.min(SettingsMenu.PANE_MAX, wide - 2 * TITLE_SIDE - W - SettingsMenu.PANE_GAP) : 0;
+        SettingsMenu.pane = pane;
+        originX = settings ? (wide - W - SettingsMenu.PANE_GAP - pane) / 2 : (wide - W) / 2;
+        Graphics.wideOrigin(originX, 0);
+        render(g);
+    }
+
+    private static Vector2 point(int screenX, int screenY) {
+        if (!wideDrawn) {
+            return Graphics.toVirtual(screenX, screenY);
+        }
+        Vector2 p = Graphics.toWide(screenX, screenY);
+        p.x -= originX;
+        return p;
+    }
+
     public static void render(Graphics g) {
         Object menu = GameBridge.currentMenu();
         if (menu == null) {
             return;
+        }
+        wideDrawn = Graphics.wide();
+        if (!wideDrawn) {
+            SettingsMenu.pane = 0;
         }
         int menuId = GameBridge.currentMenuId();
         if (menuId != lastMenuId) {
@@ -111,10 +158,12 @@ public final class MenuOverlay {
             SettingsMenu.opened();
         }
 
-        int top = showsGame() ? SettingsMenu.PANEL_TOP : 0;
+        int top = showsGame() && !wideDrawn ? SettingsMenu.PANEL_TOP : 0;
         g.setClip(0, 0, W, H);
-        g.setColor(MenuTheme.COLOR_BG);
-        g.fillRect(0, top, W, H - top);
+        if (!wideDrawn) {
+            g.setColor(MenuTheme.COLOR_BG);
+            g.fillRect(0, top, W, H - top);
+        }
 
         if (menuId == MENU_SETTINGS) {
             SettingsMenu.render(g, top);
@@ -165,6 +214,14 @@ public final class MenuOverlay {
             }
             return true;
         }
+        if (mirrorHalf > 0 && (code == Keys.LEFT || code == Keys.RIGHT)) {
+            Object menu = GameBridge.currentMenu();
+            int target = GameBridge.menuSelected(menu) + (code == Keys.RIGHT ? mirrorHalf : -mirrorHalf);
+            if (target >= 0 && target < GameBridge.menuItemCount(menu) && GameBridge.menuItemEnabled(menu, target)) {
+                GameBridge.menuSetSelected(menu, target);
+            }
+            return true;
+        }
         return false;
     }
 
@@ -208,7 +265,41 @@ public final class MenuOverlay {
         short[] splash = splashAttr;
         Object splashSheet = splashImage;
         boolean poster = splash != null;
-        if (poster) {
+        if (wideDrawn && showsGame()) {
+            int wide = Graphics.wideWidth();
+            int height = items.length * MenuTheme.ROW_H + PAUSE_HEAD + 10;
+            int top = (H - height) / 2;
+            originX = (wide - W) / 2;
+            Graphics.wideOrigin(0, 0);
+            g.setClip(0, 0, wide, H);
+            Graphics.dim(0, 0, wide, H, PAUSE_DIM);
+            Graphics.wideOrigin(originX, 0);
+            g.setClip(0, 0, W, H);
+            g.setColor(MenuTheme.COLOR_PANEL);
+            g.fillRect(0, top, W, height);
+            g.setColor(MenuTheme.COLOR_ACCENT);
+            g.fillRect(0, top, W, 1);
+            g.setFont(MenuTheme.titleFont());
+            g.setColor(MenuTheme.COLOR_TITLE);
+            g.drawString("Paused", MenuTheme.TEXT_X, top + 10, Graphics.TOP | Graphics.LEFT);
+            rowHeight = MenuTheme.ROW_H;
+            rowTop = top + PAUSE_HEAD;
+        } else if (poster && wideDrawn) {
+            int room = Graphics.wideWidth() - 2 * TITLE_SIDE - TITLE_GAP;
+            int artW = Math.min(splash[2] * (H * 86 / 100) / splash[3], room - TITLE_LIST_MIN);
+            int artH = artW * splash[3] / splash[2];
+            int listW = Math.min(W, room - artW);
+            int left = TITLE_SIDE + (room - artW - listW) / 2;
+            Graphics.wideOrigin(0, 0);
+            g.setClip(0, 0, Graphics.wideWidth(), H);
+            g.drawRegionScaled((javax.microedition.lcdui.Image) splashSheet, splash[0], splash[1], splash[2], splash[3],
+                    left, (H - artH) / 2, artW, artH);
+            originX = left + artW + TITLE_GAP;
+            Graphics.wideOrigin(originX, 0);
+            g.setClip(0, 0, listW, H);
+            rowHeight = MenuTheme.ROW_H;
+            rowTop = (H - items.length * rowHeight) / 2;
+        } else if (poster) {
             g.setColor(0);
             g.fillRect(0, 0, W, H);
             g.drawRegion((javax.microedition.lcdui.Image) splashSheet, splash[0], splash[1], splash[2], splash[3], 0,
@@ -249,6 +340,9 @@ public final class MenuOverlay {
     private static int cardButtonY = -1;
     private static int cardFocus;
     private static boolean mirrorBack;
+    private static int mirrorHalf;
+    private static final int MENU_LEVELS = 1;
+    private static final int COLUMN_GAP = 16;
 
     private static final int SCROLL_STEP = 24;
 
@@ -278,9 +372,18 @@ public final class MenuOverlay {
         }
 
         mirrorBack = right != null && !right.isEmpty();
-        MenuTheme.header(g, title == null ? "" : title, mirrorBack);
         int listTop = MenuTheme.LIST_TOP;
         int avail = VIEW_BOTTOM - listTop;
+        int half = (count + 1) / 2;
+        boolean columns = wideDrawn && menuId == MENU_LEVELS && !textOnly
+                && Graphics.wideWidth() >= 2 * W + COLUMN_GAP + 2 * TITLE_SIDE && half * (MenuTheme.ROW_H + 2) <= avail;
+        mirrorHalf = columns ? half : 0;
+        if (columns) {
+            originX = (Graphics.wideWidth() - 2 * W - COLUMN_GAP) / 2;
+            Graphics.wideOrigin(originX, 0);
+            g.setClip(0, 0, 2 * W + COLUMN_GAP, H);
+        }
+        MenuTheme.header(g, title == null ? "" : title, mirrorBack, columns ? 2 * W + COLUMN_GAP : W);
         GameBridge.setMenuView(menu, listTop, avail);
 
         int[] heights = new int[count];
@@ -292,8 +395,10 @@ public final class MenuOverlay {
             if (heights[i] <= 0) {
                 heights[i] = MenuTheme.ROW_H;
             }
-            tops[i] = total;
-            total += heights[i] + 2;
+            tops[i] = columns && i >= half ? tops[i - half] : total;
+            if (!columns || i < half) {
+                total += heights[i] + 2;
+            }
         }
         int scrollY = Math.max(0, Math.min(GameBridge.menuScroll(menu), Math.max(0, total - avail)));
         int sel = GameBridge.menuSelected(menu);
@@ -308,6 +413,10 @@ public final class MenuOverlay {
 
         g.setClip(0, listTop, W, avail);
         for (int i = 0; i < count; i++) {
+            if (columns && i == half) {
+                Graphics.wideOrigin(originX + W + COLUMN_GAP, 0);
+                g.setClip(0, listTop, W, avail);
+            }
             int y = listTop + tops[i] - scrollY;
             if (y + heights[i] < listTop || y > listTop + avail) {
                 continue;
@@ -345,6 +454,9 @@ public final class MenuOverlay {
                 g.setColor(!enabled ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_VALUE);
                 g.drawString(value, W - MenuTheme.TEXT_X, y + pad, Graphics.TOP | Graphics.RIGHT);
             }
+        }
+        if (columns) {
+            Graphics.wideOrigin(originX, 0);
         }
         g.setClip(0, 0, W, H);
 
@@ -418,7 +530,7 @@ public final class MenuOverlay {
     }
 
     public static void tap(int screenX, int screenY) {
-        Vector2 p = Graphics.toVirtual(screenX, screenY);
+        Vector2 p = point(screenX, screenY);
         int menuId = GameBridge.currentMenuId();
         if (menuId == MENU_SETTINGS) {
             SettingsMenu.tap(p.x, p.y);
@@ -469,7 +581,7 @@ public final class MenuOverlay {
     }
 
     public static void hover(int screenX, int screenY) {
-        Vector2 p = Graphics.toVirtual(screenX, screenY);
+        Vector2 p = point(screenX, screenY);
         int menuId = GameBridge.currentMenuId();
         if (menuId == MENU_SETTINGS) {
             SettingsMenu.hover(p.x, p.y);
@@ -510,12 +622,19 @@ public final class MenuOverlay {
     }
 
     private static int hoverRowMirror(float vx, float vy, int count) {
+        int first = 0;
+        if (mirrorHalf > 0 && vx >= W + COLUMN_GAP) {
+            vx -= W + COLUMN_GAP;
+            first = mirrorHalf;
+        } else if (mirrorHalf > 0) {
+            count = mirrorHalf;
+        }
         if (vx < LIST_X || vx > LIST_X + LIST_W
                 || vy < mirrorListTop || vy > mirrorListTop + mirrorAvail) {
             return -1;
         }
         int contentY = (int) vy - mirrorListTop + mirrorScrollY;
-        for (int i = 0; i < count && i < mirrorTops.length; i++) {
+        for (int i = first; i < count && i < mirrorTops.length; i++) {
             if (contentY >= mirrorTops[i] && contentY < mirrorTops[i] + mirrorHeights[i]) {
                 return i;
             }

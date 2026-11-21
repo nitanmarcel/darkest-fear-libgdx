@@ -26,6 +26,8 @@ public final class Font {
     private final int style;
     private final int size;
 
+    public static final Object TEXT_LOCK = new Object();
+
     private static final ThreadLocal<GlyphLayout> LAYOUT = ThreadLocal.withInitial(GlyphLayout::new);
 
     private static final Map<Integer, Font> CACHE = new HashMap<>();
@@ -58,9 +60,11 @@ public final class Font {
 
     public int stringWidth(String str) {
         if (str == null || str.isEmpty()) return 0;
-        GlyphLayout layout = LAYOUT.get();
-        layout.setText(bitmapFont, str);
-        return Math.round(layout.width);
+        synchronized (TEXT_LOCK) {
+            GlyphLayout layout = LAYOUT.get();
+            layout.setText(bitmapFont, str);
+            return Math.round(layout.width);
+        }
     }
 
     public int charWidth(char ch) {

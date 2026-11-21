@@ -16,8 +16,18 @@ final class LightEngine {
     private LightEngine() {
     }
 
-    private static final int W = Graphics.VIRTUAL_WIDTH, H = Graphics.VIRTUAL_HEIGHT;
-    private static final int LW = W, LH = H;
+    private static int W = Graphics.VIRTUAL_WIDTH, H = Graphics.VIRTUAL_HEIGHT;
+    private static int LW = W, LH = H;
+
+    static void resize() {
+        FrameBuffer[] fbs = {rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp};
+        for (FrameBuffer fb : fbs) {
+            if (fb != null) fb.dispose();
+        }
+        rawFbo = lightFbo = bounceFbo = mid = half = quarter = halfUp = null;
+        W = LW = Graphics.VIRTUAL_WIDTH;
+        H = LH = Graphics.VIRTUAL_HEIGHT;
+    }
     private static final int TILE = Graphics.TILE;
     private static final int SDF_CELL = TILE;
     private static final float SDF_RANGE = 32f;

@@ -152,7 +152,7 @@ public final class GameBridge {
         return -1;
     }
 
-    static boolean inLevel() {
+    public static boolean inLevel() {
         return currentScreenIs(levelCls);
     }
 
@@ -465,7 +465,7 @@ public final class GameBridge {
         try {
             return fMenuViewHeight.getInt(menu);
         } catch (Throwable t) {
-            return javax.microedition.lcdui.Graphics.VIRTUAL_HEIGHT - 110;
+            return javax.microedition.lcdui.Graphics.CLASSIC_HEIGHT - 110;
         }
     }
 

@@ -56,6 +56,7 @@ public final class GameHud {
                 : MenuOverlay.isDesktop() ? "Move: " + GameInput.keyName(GameInput.UP) + " " + GameInput.keyName(GameInput.LEFT)
                         + " " + GameInput.keyName(GameInput.DOWN) + " " + GameInput.keyName(GameInput.RIGHT) + ". Interact: "
                         + GameInput.keyName(GameInput.PRIMARY) + ". Pause: Esc."
+                : Graphics.wide() ? "Drag on the left to move. Tap on the right to pick up or put down a light."
                 : null;
         LightBridge.showMessage(controls == null ? abilities : controls + "\n\n" + abilities);
     }
@@ -97,7 +98,16 @@ public final class GameHud {
 
     public static void renderBox(Graphics g) {
         render(g, false);
-        renderPopup(g);
+        if (!corners) {
+            renderPopup(g, LightBridge.playHeight() - 8);
+        }
+    }
+
+    static boolean onPause(float screenX, float screenY) {
+        com.badlogic.gdx.math.Vector2 p = corners ? Graphics.toWide((int) screenX, (int) screenY)
+                : Graphics.toVirtual((int) screenX, (int) screenY);
+        return p.x >= pauseX - PAUSE_REACH && p.y >= pauseY - PAUSE_REACH
+                && p.y < (corners ? pauseY + ITEM_BOX + PAUSE_REACH : H);
     }
 
     public static boolean tap(int screenX, int screenY) {
@@ -112,43 +122,95 @@ public final class GameHud {
         if (!GameBridge.inLevel()) {
             return false;
         }
-        com.badlogic.gdx.math.Vector2 p = Graphics.toVirtual(screenX, screenY);
-        if (p.x >= pauseX - PAUSE_REACH && p.y >= pauseY - PAUSE_REACH && p.y < H) {
+        if (onPause(screenX, screenY)) {
             javax.microedition.lcdui.Canvas.dispatchKeyPressed(PAUSE_KEY);
             return true;
         }
         return false;
     }
 
+    private static final int CORNER = 14;
+    private static final int BACK_PAD = 4;
+    private static final float BACK_DIM = 0.55f;
+    private static boolean corners;
+
     private static void render(Graphics g, boolean pause) {
         int[] v = LightBridge.hud();
         int top = LightBridge.playHeight();
+        corners = Graphics.wide();
+        if (corners) {
+            g.setClip(0, 0, Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT);
+            g.setColor(0);
+            g.fillRect(0, top, Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT - top);
+            return;
+        }
         if (v == null || top <= 0 || top >= H) {
             return;
         }
-        Font bold = MenuTheme.bold();
-        Font plain = MenuTheme.plain();
-        int anchor = Graphics.TOP | Graphics.LEFT;
         g.setClip(0, 0, W, H);
         g.setColor(MenuTheme.COLOR_BG);
         g.fillRect(0, top, W, H - top);
         g.setColor(MenuTheme.COLOR_BAR);
         g.fillRect(0, top, W, 1);
+        stats(g, v, 12, top + 5, W - 12);
+        int ruleY = top + 25;
+        g.setColor(MenuTheme.COLOR_RULE);
+        g.fillRect(MenuTheme.MARGIN, ruleY, W - 2 * MenuTheme.MARGIN, 1);
+        item(g, v, 10, ruleY + 4);
+        pauseX = W - 10 - ITEM_BOX;
+        pauseY = ruleY + 4;
+        if (pause) {
+            pauseButton(g);
+        }
+    }
 
-        int rowY = top + 5;
+    public static void renderWide(Graphics g, boolean box) {
+        int[] v = LightBridge.hud();
+        if (v == null) {
+            return;
+        }
+        int wide = Graphics.wideWidth();
+        g.setClip(0, 0, wide, H);
+        int left = CORNER + Graphics.wideInsetLeft(), right = wide - CORNER - Graphics.wideInsetRight();
+        pauseX = right - ITEM_BOX;
+        pauseY = CORNER - 2;
+        int statsRight = box ? right : pauseX - 10;
+        int itemY = GameControls.touchDevice() ? CORNER + 24 : H - CORNER - ITEM_BOX;
+        Font bold = MenuTheme.bold();
+        int hearts = v[1] <= MAX_HEARTS ? v[1] * HEART_STEP : 13 + bold.stringWidth(v[0] + "/" + v[1]);
+        int counts = bold.stringWidth(v[3] + "/" + v[4]) + 16 + 10 + bold.stringWidth(String.valueOf(v[2])) + 18;
+        Graphics.dim(left - BACK_PAD, CORNER - BACK_PAD, hearts + 2 * BACK_PAD, 16 + 2 * BACK_PAD, BACK_DIM);
+        Graphics.dim(statsRight - counts - BACK_PAD, CORNER - BACK_PAD, counts + 2 * BACK_PAD, 16 + 2 * BACK_PAD, BACK_DIM);
+        if (v[5] >= 0) {
+            Graphics.dim(left + ITEM_BOX, itemY, 8 + MenuTheme.plain().stringWidth(GameBridge.text(v[5])) + BACK_PAD,
+                    ITEM_BOX, BACK_DIM);
+        }
+        stats(g, v, left, CORNER, statsRight);
+        item(g, v, left, itemY);
+        if (box) {
+            Graphics.wideOrigin(Graphics.sceneX() + (Graphics.sceneWidth() - W) / 2, Graphics.sceneY());
+            renderPopup(g, Graphics.sceneHeight() - 8);
+        } else {
+            pauseButton(g);
+        }
+    }
+
+    private static void stats(Graphics g, int[] v, int left, int rowY, int right) {
+        Font bold = MenuTheme.bold();
+        int anchor = Graphics.TOP | Graphics.LEFT;
         int textY = rowY + (16 - bold.getHeight()) / 2 + MenuTheme.TEXT_DROP;
         g.setFont(bold);
         if (v[1] <= MAX_HEARTS) {
             for (int i = 0; i < v[1]; i++) {
-                sprite(g, HEART, 12 + i * HEART_STEP, rowY + 1, i < v[0]);
+                sprite(g, HEART, left + i * HEART_STEP, rowY + 1, i < v[0]);
             }
         } else {
-            sprite(g, HEART, 12, rowY + 1, true);
+            sprite(g, HEART, left, rowY + 1, true);
             g.setColor(MenuTheme.COLOR_VALUE);
-            g.drawString(v[0] + "/" + v[1], 25, textY, anchor);
+            g.drawString(v[0] + "/" + v[1], left + 13, textY, anchor);
         }
         String saved = v[3] + "/" + v[4];
-        int x = W - 12 - bold.stringWidth(saved);
+        int x = right - bold.stringWidth(saved);
         g.setColor(MenuTheme.COLOR_VALUE);
         g.drawString(saved, x, textY, anchor);
         x -= 16;
@@ -158,39 +220,35 @@ public final class GameHud {
         g.setColor(MenuTheme.COLOR_VALUE);
         g.drawString(keys, x, textY, anchor);
         sprite(g, KEY, x - 18, rowY + 4, true);
+    }
 
-        int ruleY = top + 25;
-        g.setColor(MenuTheme.COLOR_RULE);
-        g.fillRect(MenuTheme.MARGIN, ruleY, W - 2 * MenuTheme.MARGIN, 1);
-
-        int boxY = ruleY + 4;
+    private static void item(Graphics g, int[] v, int x, int boxY) {
+        Font plain = MenuTheme.plain();
         g.setColor(MenuTheme.COLOR_PANEL);
-        g.fillRect(10, boxY, ITEM_BOX, ITEM_BOX);
+        g.fillRect(x, boxY, ITEM_BOX, ITEM_BOX);
         g.setColor(v[6] >= 0 ? MenuTheme.COLOR_ACCENT : MenuTheme.COLOR_RULE);
-        g.fillRect(10, boxY, ITEM_BOX, 1);
+        g.fillRect(x, boxY, ITEM_BOX, 1);
         short[] item = v[6] >= 0 ? LightBridge.spriteAttr(v[6]) : null;
         if (item != null) {
-            sprite(g, v[6], 10 + (ITEM_BOX - item[2]) / 2, boxY + 1 + (ITEM_BOX - item[3]) / 2, true);
+            sprite(g, v[6], x + (ITEM_BOX - item[2]) / 2, boxY + 1 + (ITEM_BOX - item[3]) / 2, true);
         }
-        int lineY = boxY + (ITEM_BOX - plain.getHeight()) / 2 + MenuTheme.TEXT_DROP;
         if (v[5] >= 0) {
             g.setFont(plain);
             g.setColor(MenuTheme.COLOR_TEXT);
-            g.drawString(GameBridge.text(v[5]), 10 + ITEM_BOX + 8, lineY, anchor);
-        }
-        pauseX = W - 10 - ITEM_BOX;
-        pauseY = boxY;
-        if (pause) {
-            g.setColor(MenuTheme.COLOR_PANEL);
-            g.fillRect(pauseX, pauseY, ITEM_BOX, ITEM_BOX);
-            g.setColor(MenuTheme.COLOR_VALUE);
-            g.fillRect(pauseX + 6, pauseY + 5, 2, ITEM_BOX - 10);
-            g.fillRect(pauseX + ITEM_BOX - 8, pauseY + 5, 2, ITEM_BOX - 10);
+            g.drawString(GameBridge.text(v[5]), x + ITEM_BOX + 8,
+                    boxY + (ITEM_BOX - plain.getHeight()) / 2 + MenuTheme.TEXT_DROP, Graphics.TOP | Graphics.LEFT);
         }
     }
 
-    private static void renderPopup(Graphics g) {
-        int bottom = LightBridge.playHeight() - 8;
+    private static void pauseButton(Graphics g) {
+        g.setColor(MenuTheme.COLOR_PANEL);
+        g.fillRect(pauseX, pauseY, ITEM_BOX, ITEM_BOX);
+        g.setColor(MenuTheme.COLOR_VALUE);
+        g.fillRect(pauseX + 6, pauseY + 5, 2, ITEM_BOX - 10);
+        g.fillRect(pauseX + ITEM_BOX - 8, pauseY + 5, 2, ITEM_BOX - 10);
+    }
+
+    private static void renderPopup(Graphics g, int bottom) {
         String[] raw = GameBridge.popupLines();
         int portrait = GameBridge.popupPortrait();
         short[] face = portrait >= 0 ? LightBridge.spriteAttr(portrait) : null;

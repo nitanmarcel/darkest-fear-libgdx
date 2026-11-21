@@ -25,6 +25,9 @@ public final class GameControls {
     private static int direction = -1;
     private static float originX, originY, lastX, lastY, tiltX, tiltY;
     private static long skippedAt;
+    private static float tapX, tapY, tapTime = 1f;
+    private static final float TAP_RING_SECONDS = 0.3f;
+    private static final float RESTING_ALPHA = 0.35f;
     private static Texture padArt, nubArt, buttonArt, handArt, skipArt;
     private static final float SIDE_X = 0.25f, SKIP_W = 0.32f;
     private static final float MAX_UNIT_DP = 420;
@@ -56,7 +59,7 @@ public final class GameControls {
         return System.currentTimeMillis() - skippedAt < SKIP_TAP_GUARD_MS;
     }
 
-    private static boolean touchDevice() {
+    static boolean touchDevice() {
         Application.ApplicationType type = Gdx.app.getType();
         return type == Application.ApplicationType.Android || type == Application.ApplicationType.iOS;
     }
@@ -95,8 +98,12 @@ public final class GameControls {
                 lastY = y;
                 tiltX = 0;
                 tiltY = 0;
-            } else if (mode == LEVEL && x >= w / 2 && y >= controlsTop() && actionPointer < 0) {
+            } else if (mode == LEVEL && x >= w / 2 && actionPointer < 0
+                    && (Graphics.wide() ? !GameHud.onPause(x, y) : y >= controlsTop())) {
                 actionPointer = p;
+                tapX = x;
+                tapY = y;
+                tapTime = 0f;
                 GameInput.press(GameInput.PRIMARY);
             } else if (mode == CUTSCENE && onSkip(x, y)) {
                 skippedAt = System.currentTimeMillis();
@@ -174,44 +181,56 @@ public final class GameControls {
         float oldY = bf.getData().scaleY;
         float scale = (u * 0.04f) / (bf.getCapHeight() * Graphics.RENDER_SCALE);
 
-        Graphics.beginHud();
-        try {
-            g.setFont(font);
-            if (mode == LEVEL) {
-                if (padArt == null) {
-                    padArt = art("stick_pad");
-                    nubArt = art("stick_nub");
-                    buttonArt = art("button");
-                    handArt = art("icon_hand");
-                }
-                float reach = u * REACH;
-                float cx = stickPointer >= 0 ? originX : u * SIDE_X;
-                float cy = stickPointer >= 0 ? originY : controlsY();
-                float kx = cx + (direction == GameInput.LEFT ? -reach : direction == GameInput.RIGHT ? reach : 0) * 0.6f;
-                float ky = cy + (direction == GameInput.UP ? -reach : direction == GameInput.DOWN ? reach : 0) * 0.6f;
-                Graphics.drawHud(padArt, cx, cy, reach * 2.8f, reach * 2.8f, COLOR_IDLE);
-                Graphics.drawHud(nubArt, kx, ky, reach * 1.3f, reach * 1.3f,
-                        direction >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE);
+        synchronized (Font.TEXT_LOCK) {
+            Graphics.beginHud();
+            try {
+                g.setFont(font);
+                if (mode == LEVEL) {
+                    if (padArt == null) {
+                        padArt = art("stick_pad");
+                        nubArt = art("stick_nub");
+                        buttonArt = art("button");
+                        handArt = art("icon_hand");
+                    }
+                    float reach = u * REACH;
+                    float cx = stickPointer >= 0 ? originX : u * SIDE_X + Gdx.graphics.getSafeInsetLeft();
+                    float cy = stickPointer >= 0 ? originY : controlsY();
+                    float kx = cx + (direction == GameInput.LEFT ? -reach : direction == GameInput.RIGHT ? reach : 0) * 0.6f;
+                    float ky = cy + (direction == GameInput.UP ? -reach : direction == GameInput.DOWN ? reach : 0) * 0.6f;
+                    float resting = stickPointer < 0 && Graphics.wide() ? RESTING_ALPHA : 1f;
+                    Graphics.drawHud(padArt, cx, cy, reach * 2.8f, reach * 2.8f, COLOR_IDLE, resting);
+                    Graphics.drawHud(nubArt, kx, ky, reach * 1.3f, reach * 1.3f,
+                            direction >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE, resting);
 
-                int action = actionPointer >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE;
-                Graphics.drawHud(buttonArt, rightX(), controlsY(), u * 0.26f, u * 0.26f, action);
-                Graphics.drawHud(handArt, rightX(), controlsY(), u * 0.13f, u * 0.13f, action);
-            } else if (mode == CUTSCENE) {
-                if (skipArt == null) {
-                    skipArt = art("button_wide");
+                    if (Graphics.wide()) {
+                        tapTime += Gdx.graphics.getDeltaTime();
+                        if (tapTime < TAP_RING_SECONDS) {
+                            float grow = u * (0.10f + 0.10f * tapTime / TAP_RING_SECONDS);
+                            Graphics.drawHud(buttonArt, tapX, tapY, grow, grow, MenuTheme.COLOR_ACCENT);
+                        }
+                    } else {
+                        int action = actionPointer >= 0 ? MenuTheme.COLOR_ACCENT : COLOR_IDLE;
+                        Graphics.drawHud(buttonArt, rightX(), controlsY(), u * 0.26f, u * 0.26f, action);
+                        Graphics.drawHud(handArt, rightX(), controlsY(), u * 0.13f, u * 0.13f, action);
+                    }
+                } else if (mode == CUTSCENE) {
+                    if (skipArt == null) {
+                        skipArt = art("button_wide");
+                    }
+                    Graphics.drawHud(skipArt, rightX(), controlsY(), u * SKIP_W, u * SKIP_W / 2, COLOR_IDLE);
+                    bf.getData().setScale(scale);
+                    g.setColor(COLOR_IDLE);
+                    g.drawString("Skip", Math.round(rightX()), Math.round(controlsY()), Graphics.HCENTER | Graphics.VCENTER);
                 }
-                Graphics.drawHud(skipArt, rightX(), controlsY(), u * SKIP_W, u * SKIP_W / 2, COLOR_IDLE);
-                bf.getData().setScale(scale);
-                g.setColor(COLOR_IDLE);
-                g.drawString("Skip", Math.round(rightX()), Math.round(controlsY()), Graphics.HCENTER | Graphics.VCENTER);
+                bf.getData().setScale(scale * 0.6f);
+                g.setColor(MenuTheme.COLOR_TEXT);
+                g.drawString(Gdx.graphics.getFramesPerSecond() + " FPS", (int) (u * 0.04f) + Gdx.graphics.getSafeInsetLeft(),
+                        Graphics.wide() ? Gdx.graphics.getHeight() - (int) (u * 0.04f) : (int) (u * 0.09f),
+                        Graphics.LEFT | Graphics.VCENTER);
+            } finally {
+                bf.getData().setScale(oldX, oldY);
+                Graphics.endHud();
             }
-            bf.getData().setScale(scale * 0.6f);
-            g.setColor(MenuTheme.COLOR_TEXT);
-            g.drawString(Gdx.graphics.getFramesPerSecond() + " FPS", (int) (u * 0.04f), (int) (u * 0.09f),
-                    Graphics.LEFT | Graphics.VCENTER);
-        } finally {
-            bf.getData().setScale(oldX, oldY);
-            Graphics.endHud();
         }
     }
 }

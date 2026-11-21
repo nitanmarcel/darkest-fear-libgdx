@@ -30,6 +30,15 @@ uniform float u_dangerBody;
 uniform vec3 u_cueColor;
 uniform sampler2D u_shape;
 uniform vec3 u_shapeLight;
+varying vec2 v_pos;
+uniform vec4 u_edge;
+uniform vec3 u_edgeArea;
+
+float edgeLight(vec2 pos) {
+    float d = min(min(mix(1e4, pos.x, u_edge.x), mix(1e4, u_edgeArea.x - pos.x, u_edge.y)),
+                  min(mix(1e4, pos.y, u_edge.z), mix(1e4, u_edgeArea.y - pos.y, u_edge.w)));
+    return smoothstep(0.0, u_edgeArea.z, d);
+}
 
 vec3 shade(vec3 albedo, vec3 L) {
     vec3 col = albedo * (u_ambient + L);
@@ -101,7 +110,7 @@ void main() {
         float facing = step(0.5, dot(outward, toward)) * step(outward.y, 0.4);
         rim = step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a;
     }
-    L = lampLight(L);
+    L = lampLight(L) * edgeLight(v_pos);
 
     bool cap = v_cls < 1.5 && is(col.rgb, u_capColor);
     if (cap) {

@@ -358,13 +358,110 @@ public final class LightBridge {
         }
     }
 
+    private static Field fScreenW, fScreenH;
+    private static java.lang.reflect.Constructor<?> tileRendererCtor;
+    private static Method mCamera, mSceneStart;
+    private static int classicW, classicH, stripH = -1;
+    private static Object sizedLevel;
+    private static int sizedW, sizedH;
+
+    public static void syncView() {
+        if (!available() || fPlayH == null || fTileRenderer == null) {
+            return;
+        }
+        try {
+            if (fScreenW == null) {
+                Class<?> screenCls = Class.forName("r", false, LightBridge.class.getClassLoader());
+                fScreenW = declaredField(screenCls, "b", int.class);
+                fScreenH = declaredField(screenCls, "c", int.class);
+                fScreenW.setAccessible(true);
+                fScreenH.setAccessible(true);
+                classicW = fScreenW.getInt(null);
+                classicH = fScreenH.getInt(null);
+                if (classicW <= 0 || classicH <= 0) {
+                    fScreenW = null;
+                    return;
+                }
+                Class<?> cutsceneCls = Class.forName("p", false, LightBridge.class.getClassLoader());
+                new Thread(() -> {
+                    try {
+                        Class.forName("p", true, LightBridge.class.getClassLoader());
+                    } catch (Throwable ignored) {
+                    }
+                }).start();
+                for (Method m : cutsceneCls.getDeclaredMethods()) {
+                    if (m.getName().equals("a") && m.getParameterCount() == 0 && m.getReturnType() == void.class) {
+                        m.setAccessible(true);
+                        mSceneStart = m;
+                    }
+                }
+                Class<?> tileCls = fTileRenderer.getType();
+                tileRendererCtor = tileCls.getDeclaredConstructor(int.class, int.class, int.class, int.class, int.class,
+                        int.class, int.class, int.class, levelCls);
+                tileRendererCtor.setAccessible(true);
+                for (Method m : levelCls.getDeclaredMethods()) {
+                    if (m.getParameterCount() == 0 && m.getReturnType() == boolean.class
+                            && java.lang.reflect.Modifier.isPublic(m.getModifiers())) {
+                        mCamera = m;
+                    }
+                }
+            }
+            Object level = currentLevel();
+            int w = classicW, h = classicH;
+            if (level != null) {
+                if (stripH < 0 && fScreenH.getInt(null) == classicH) {
+                    stripH = classicH - fPlayH.getInt(null);
+                }
+                byte[][] grid = (byte[][]) fGrid.get(level);
+                if (stripH >= 0 && grid != null && javax.microedition.lcdui.Graphics.isExpandedView()
+                        && javax.microedition.lcdui.Graphics.wide()) {
+                    int fullW = (grid[0].length - 1) * 16 + 12, fullH = grid.length * 16 + 4;
+                    w = Math.min(javax.microedition.lcdui.Graphics.sceneRoomWidth(), fullW) & ~1;
+                    h = (Math.min(javax.microedition.lcdui.Graphics.sceneRoomHeight(), fullH) & ~1) + stripH;
+                }
+            }
+            if (level != null && stripH >= 0 && (level != sizedLevel || w != sizedW || h != sizedH)) {
+                boolean rebuild = sizedLevel == level || w != classicW || h != classicH;
+                sizedLevel = level;
+                sizedW = w;
+                sizedH = h;
+                fScreenW.setInt(null, w);
+                fScreenH.setInt(null, h);
+                fPlayH.setInt(null, h - stripH);
+                if (rebuild) {
+                    byte[][] grid = (byte[][]) fGrid.get(level);
+                    fTileRenderer.set(null, tileRendererCtor.newInstance(w, h - stripH, 16, 16, grid[0].length, grid.length, 1, 1, level));
+                    if (mCamera != null) {
+                        mCamera.invoke(level);
+                    }
+                    repaintFloor(level);
+                }
+            } else if (level == null && fScreenW.getInt(null) != classicW) {
+                fScreenW.setInt(null, classicW);
+                fScreenH.setInt(null, classicH);
+                sizedLevel = null;
+                if (GameBridge.inCutscene() && mSceneStart != null) {
+                    mSceneStart.invoke(mGetCurrentScreen.invoke(null));
+                }
+            } else if (level != null && fScreenW.getInt(null) != sizedW) {
+                fScreenW.setInt(null, sizedW);
+                fScreenH.setInt(null, sizedH);
+                fPlayH.setInt(null, sizedH - stripH);
+            }
+            javax.microedition.lcdui.Graphics.resizeScene(fScreenW.getInt(null), fScreenH.getInt(null));
+        } catch (Throwable t) {
+            com.badlogic.gdx.Gdx.app.error("LightBridge", "view sync failed", t);
+        }
+    }
+
     private static void repaintFloor(Object level) {
         if (fTileRenderer == null || fTileBuffer == null || mDrawTileLayer == null) {
             return;
         }
         try {
             int[] cam = (int[]) fCamera.get(level);
-            int halfW = javax.microedition.lcdui.Graphics.VIRTUAL_WIDTH / 2, halfH = fPlayH.getInt(null) / 2;
+            int halfW = (fScreenW != null ? fScreenW.getInt(null) : javax.microedition.lcdui.Graphics.VIRTUAL_WIDTH) / 2 + 16;
+            int halfH = fPlayH.getInt(null) / 2 + 16;
             mDrawTileLayer.invoke(fTileRenderer.get(null), fTileBuffer.get(null),
                     cam[0] - halfW, cam[1] - halfH, cam[0] + halfW - 1, cam[1] + halfH - 1, true);
         } catch (Throwable t) {

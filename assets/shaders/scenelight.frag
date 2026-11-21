@@ -22,6 +22,14 @@ uniform vec3 u_ambient;
 uniform vec3 u_bounceGain;
 uniform float u_curveF[8];
 uniform float u_debug;
+uniform vec4 u_edge;
+uniform vec3 u_edgeArea;
+
+float edgeLight(vec2 pos) {
+    float d = min(min(mix(1e4, pos.x, u_edge.x), mix(1e4, u_edgeArea.x - pos.x, u_edge.y)),
+                  min(mix(1e4, pos.y, u_edge.z), mix(1e4, u_edgeArea.y - pos.y, u_edge.w)));
+    return smoothstep(0.0, u_edgeArea.z, d);
+}
 
 vec3 shade(vec3 albedo, vec3 L) {
     vec3 col = albedo * (u_ambient + L);
@@ -50,7 +58,7 @@ void main() {
     vec2 uv = (sp + u_lightShift) / u_screen;
     vec2 mp = sp + u_scroll;
     vec3 L = 2.0 * texture2D(u_light, uv).rgb + texture2D(u_bounce, uv).rgb * u_bounceGain;
-    L = lampLight(L);
+    L = lampLight(L) * edgeLight(sp);
 
     L *= 1.0 - 0.6 * texture2D(u_furniture, mp / (u_mapTiles * 16.0)).r;
     col.rgb = shade(col.rgb, L);

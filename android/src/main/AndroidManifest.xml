@@ -20,7 +20,7 @@
         <activity
             android:name="darkestfear.android.AndroidLauncher"
             android:label="Darkest Fear"
-            android:screenOrientation="portrait"
+            android:screenOrientation="fullUser"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout"
             android:exported="true">
             <intent-filter>

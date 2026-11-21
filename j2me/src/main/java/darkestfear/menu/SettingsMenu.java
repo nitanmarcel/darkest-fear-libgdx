@@ -35,7 +35,7 @@ final class SettingsMenu {
         final Setter setter;
         final String help;
         Check available;
-        String unavailableHelp;
+        Text unavailableHelp;
         Text shown;
 
         Setting(String section, String label, String[] values, Getter getter, Setter setter, String help) {
@@ -48,6 +48,10 @@ final class SettingsMenu {
         }
 
         Setting needs(Check check, String why) {
+            return needs(check, () -> why);
+        }
+
+        Setting needs(Check check, Text why) {
             available = check;
             unavailableHelp = why;
             return this;
@@ -65,6 +69,9 @@ final class SettingsMenu {
     private static final int MARGIN = MenuTheme.MARGIN;
     private static final int TEXT_X = MenuTheme.TEXT_X;
     static final int PANEL_TOP = 150;
+    static final int PANE_MAX = 260;
+    static final int PANE_GAP = 24;
+    static int pane;
     private static final int PANEL_LIST_TOP = PANEL_TOP + 26;
     private static final int PANEL_LIST_BOTTOM = MenuTheme.H - 6;
     private static final int LIST_BOTTOM = 258;
@@ -105,6 +112,16 @@ final class SettingsMenu {
                 () -> Graphics.isCuesEnabled() ? 1 : 0, v -> Graphics.setCuesEnabled(v == 1),
                 "Marks doors, closets and unlit lamps, and warns you when the dark is about to hurt.")
                 .needs(Graphics::isLightingEnabled, "Needs Lighting set to Enhanced."));
+        String needsWide = MenuOverlay.isDesktop() ? "Needs a wider window." : "Turn your phone sideways to use this.";
+        list.add(new Setting("Display", "View", new String[] {"Original", "Expanded"},
+                () -> Graphics.isExpandedView() ? 1 : 0, v -> Graphics.setExpandedView(v == 1),
+                "Expanded shows more of the level on wide screens. Original keeps the game's own view.")
+                .needs(Graphics::wide, needsWide));
+        list.add(new Setting("Display", "Zoom", new String[] {"Far", "Near", "Closer"},
+                Graphics::zoom, Graphics::setZoom,
+                "Near and Closer make the level bigger. Far shows more of it at once.")
+                .needs(() -> Graphics.wide() && Graphics.isExpandedView(),
+                        () -> Graphics.wide() ? "Needs View set to Expanded." : needsWide));
         if (MenuOverlay.isDesktop()) {
             list.add(new Setting("Display", "Fullscreen", OFF_ON,
                     () -> Gdx.graphics.isFullscreen() ? 1 : 0, v -> MenuOverlay.toggleFullscreen(),
@@ -161,7 +178,7 @@ final class SettingsMenu {
         Setting[] all = settings();
         boolean panel = panelTop > 0;
         listTop = panel ? PANEL_LIST_TOP : MenuTheme.LIST_TOP;
-        listBottom = panel ? PANEL_LIST_BOTTOM : LIST_BOTTOM;
+        listBottom = panel || pane > 0 ? PANEL_LIST_BOTTOM : LIST_BOTTOM;
         Font bold = MenuTheme.bold();
         Font plain = MenuTheme.plain();
         int top = Graphics.TOP;
@@ -169,7 +186,8 @@ final class SettingsMenu {
         if (panel) {
             MenuTheme.panelHeader(g, MenuOverlay.textOr(4, "Settings"), panelTop);
         } else {
-            MenuTheme.header(g, MenuOverlay.textOr(4, "Settings"), true);
+            g.setClip(0, 0, W + PANE_GAP + pane, H);
+            MenuTheme.header(g, MenuOverlay.textOr(4, "Settings"), true, W + (pane > 0 ? PANE_GAP + pane : 0));
         }
 
         int view = listBottom - listTop;
@@ -212,12 +230,40 @@ final class SettingsMenu {
         MenuTheme.scrollBar(g, listTop, view, scrollY, contentHeight);
 
         Setting current = all[selected];
-        if (!panel) {
+        if (pane > 0) {
+            int x = W + PANE_GAP;
+            g.setClip(0, 0, x + pane, H);
+            g.setColor(MenuTheme.COLOR_RULE);
+            g.fillRect(W + PANE_GAP / 2, MenuTheme.LIST_TOP, 1, H - MenuTheme.LIST_TOP - 8);
+            g.setFont(MenuTheme.titleFont());
+            g.setColor(MenuTheme.COLOR_TITLE);
+            g.drawString(current.label, x, MenuTheme.LIST_TOP + 2, top | Graphics.LEFT);
+            g.setFont(plain);
+            g.setColor(MenuTheme.COLOR_TEXT);
+            int y = MenuTheme.LIST_TOP + 30;
+            for (String line : MenuOverlay.wrapText(plain, current.usable() ? current.help : current.unavailableHelp.get(), pane)) {
+                g.drawString(line, x, y, top | Graphics.LEFT);
+                y += HELP_STEP;
+            }
+            int play = LightBridge.playHeight();
+            if (MenuOverlay.showsGame() && play > 0) {
+                y += 10;
+                int sceneW = Graphics.VIRTUAL_WIDTH;
+                int pw = Math.min(pane, sceneW), ph = Math.min(H - y - 10, play);
+                if (ph > 40) {
+                    int[] thomas = LightBridge.actor(0);
+                    int cx = thomas == null ? sceneW / 2 : thomas[0] + 8 - Graphics.sceneScrollX();
+                    int cy = thomas == null ? play / 2 : thomas[1] + 8 - Graphics.sceneScrollY();
+                    Graphics.drawGame(Math.max(0, Math.min(sceneW - pw, cx - pw / 2)),
+                            Math.max(0, Math.min(play - ph, cy - ph / 2)), pw, ph, x, y);
+                }
+            }
+        } else if (!panel) {
             g.setColor(MenuTheme.COLOR_RULE);
             g.fillRect(MARGIN, listBottom + 3, W - 2 * MARGIN, 1);
             g.setFont(plain);
             g.setColor(MenuTheme.COLOR_TEXT);
-            String[] help = MenuOverlay.wrapText(plain, current.usable() ? current.help : current.unavailableHelp, W - 2 * TEXT_X);
+            String[] help = MenuOverlay.wrapText(plain, current.usable() ? current.help : current.unavailableHelp.get(), W - 2 * TEXT_X);
             for (int k = 0; k < help.length; k++) {
                 g.drawString(help[k], TEXT_X, HELP_Y + k * HELP_STEP, top | Graphics.LEFT);
             }
