@@ -323,7 +323,7 @@ public final class GameBridge {
             return false;
         }
         try {
-            return fCanContinue.getBoolean(null);
+            return fCanContinue.getBoolean(null) || levelCls.isInstance(fPendingScreen.get(null));
         } catch (Throwable t) {
             return false;
         }
