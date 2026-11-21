@@ -17,6 +17,7 @@ public class Image {
     private Texture texture;
     private boolean dirty;
     private Texture upscaled;
+    private Texture shape;
     private boolean upscaleTried;
 
     private Image(boolean mutable, int width, int height, Pixmap pixmap) {
@@ -86,20 +87,36 @@ public class Image {
     }
 
     Texture upscaledTexture() {
-        if (!upscaleTried) {
-            upscaleTried = true;
-            int[] frames = darkestfear.menu.LightBridge.spriteFrames(this);
-            if (frames.length > 0) {
-                upscaled = GlThread.call(() -> {
-                    Pixmap pm = SpriteUpscaler.upscale(pixmap, frames);
-                    Texture t = new Texture(pm);
-                    t.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
-                    pm.dispose();
-                    return t;
-                });
-            }
-        }
+        buildSheets();
         return upscaled;
+    }
+
+    /** How each sprite's surface faces the light (see SpriteUpscaler.shape), or null if the sheet holds no sprites. */
+    Texture shapeTexture() {
+        buildSheets();
+        return shape;
+    }
+
+    private void buildSheets() {
+        if (upscaleTried) {
+            return;
+        }
+        upscaleTried = true;
+        int[] frames = darkestfear.menu.LightBridge.spriteFrames(this);
+        if (frames.length == 0) {
+            return;
+        }
+        GlThread.call(() -> {
+            Pixmap up = SpriteUpscaler.upscale(pixmap, frames);
+            Pixmap surface = SpriteUpscaler.shape(up, frames);
+            upscaled = new Texture(up);
+            upscaled.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            shape = new Texture(surface);
+            shape.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
+            up.dispose();
+            surface.dispose();
+            return null;
+        });
     }
 
     Texture texture() {

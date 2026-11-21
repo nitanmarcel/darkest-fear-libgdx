@@ -30,12 +30,12 @@ final class SceneCompositor {
     private static final float DANGER_VIGNETTE_MIN = 0.30f, DANGER_VIGNETTE_MAX = 0.65f;
     private static final int VIGNETTE_SIZE = 64;
 
+    private static final float SHAPE_LIFT = 0.6f, SHAPE_EDGE = 0.5f, SHAPE_EDGE_WIDTH = 2f;
+
     private static final int CLS_CUE = 6;
-    // The sprites the game's own draw code uses for a patient and a child not yet saved by light.
     private static final int PATIENT_UNSAVED = 60, CHILD_UNSAVED = 79;
     private static final float CUE_R = 0.46f, CUE_G = 0.39f, CUE_B = 0.70f;
-    // Cue pixels per sprite: sprite id, x, y, w, h in sprite pixels, kind. An ember marks where the
-    // light would be on an unlit source; a handle marks the part of a usable object you'd grab.
+
     private static final int EMBER = 0, HANDLE = 1;
     private static final int[] CUES = {
         92, 3, 6, 2, 2, EMBER,
@@ -77,6 +77,7 @@ final class SceneCompositor {
     private static Texture vignette;
     private static float cueTime;
     private static float dimBody;
+    private static Texture boundShape, flatShape;
     private static int cuesPending;
     private static final int[] cueRect = new int[MAX_PENDING * 4];
     private static float cueBits;
@@ -175,6 +176,9 @@ final class SceneCompositor {
         sh.setUniformf("u_wallSoft", LightTuning.wallSoft);
         sh.setUniformf("u_debug", debug ? 1f : 0f);
         sh.setUniformf("u_cueColor", CUE_R, CUE_G, CUE_B);
+        sh.setUniformi("u_shape", 3);
+        sh.setUniformf("u_shapeLight", SHAPE_LIFT, SHAPE_EDGE, SHAPE_EDGE_WIDTH / SpriteUpscaler.SHAPE_RANGE);
+        boundShape = null;
         dimBody = Graphics.cuesEnabled ? PERSON_BODY : 0f;
         sh.setUniformf("u_dangerBody", dimBody);
         if (lit) {
@@ -265,6 +269,7 @@ final class SceneCompositor {
             Graphics.batch.flush();
             Gdx.gl.glScissor(0, Graphics.FBO_H - bottom * sc, Graphics.FBO_W, bottom * sc);
             Graphics.batch.setPackedColor(pack(cx, cy, CLS_PLAYER, FLAT));
+            useShape((Image) img);
             Texture upscaled = Graphics.upscaledSheet((Image) img);
             int up = SpriteUpscaler.SCALE;
             if (upscaled != null) {
@@ -355,6 +360,7 @@ final class SceneCompositor {
     }
 
     private static void drawTile(Image img, int x, int y, int w, int h, int sx, int sy, int sw, int sh) {
+        useShape(img);
         Texture upscaled = Graphics.upscaledSheet(img);
         if (upscaled != null) {
             int up = SpriteUpscaler.SCALE;
@@ -497,6 +503,30 @@ final class SceneCompositor {
             }
         }
         return true;
+    }
+
+    /** Puts the sheet's shape map on texture unit 3 for the sprites about to be drawn from it. */
+    static void useShape(Image img) {
+        if (!active || !PER_SPRITE[current] || Graphics.objectLightShader == null) {
+            return;
+        }
+        Texture shape = lit() ? img.shapeTexture() : null;
+        if (shape == null) {
+            if (flatShape == null) {
+                Pixmap pm = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+                pm.setBlending(Pixmap.Blending.None);
+                pm.drawPixel(0, 0, 0x8080ff00);
+                flatShape = new Texture(pm);
+                pm.dispose();
+            }
+            shape = flatShape;
+        }
+        if (shape != boundShape) {
+            Graphics.batch.flush();
+            shape.bind(3);
+            Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
+            boundShape = shape;
+        }
     }
 
     private static boolean personAt(LightBridge.LightState s, int row, int col) {
@@ -743,6 +773,10 @@ final class SceneCompositor {
         if (vignette != null) {
             vignette.dispose();
             vignette = null;
+        }
+        if (flatShape != null) {
+            flatShape.dispose();
+            flatShape = null;
         }
         if (classifyFbo != null) {
             classifyFbo.dispose();

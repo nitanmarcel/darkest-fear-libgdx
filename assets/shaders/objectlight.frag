@@ -28,6 +28,8 @@ uniform float u_wallSoft;
 uniform float u_debug;
 uniform float u_dangerBody;
 uniform vec3 u_cueColor;
+uniform sampler2D u_shape;
+uniform vec3 u_shapeLight;
 
 vec3 shade(vec3 albedo, vec3 L) {
     vec3 col = albedo * (u_ambient + L);
@@ -48,6 +50,10 @@ vec3 lampLight(vec3 lamp) {
     float pk = max(lamp.r, max(lamp.g, lamp.b));
     vec3 chroma = mix(vec3(1.0), lamp / max(pk, 0.0001), smoothstep(0.0, 0.02, pk));
     return chroma * levelCurve(min(pk * 7.0, 7.0));
+}
+
+float glow(vec3 c) {
+    return dot(c, vec3(0.299, 0.587, 0.114));
 }
 
 bool is(vec3 c, vec3 key) {
@@ -76,6 +82,25 @@ void main() {
         vec3 under = 2.0 * texture2D(u_light, v_puv).rgb + texture2D(u_bounce, v_puv).rgb * u_bounceGain;
         L = mix(L, max(L, under), u_actorPixel);
     }
+    float rim = 0.0;
+    if (player || (v_cls > 2.5 && v_cls < 3.5)) {
+        vec4 surface = texture2D(u_shape, v_texCoords);
+        vec2 slope = surface.rg * 2.0 - 1.0;
+        slope *= step(0.02, length(slope));
+        vec2 rise = vec2(
+            glow(texture2D(u_bounce, v_puv + vec2(v_lim.x, 0.0)).rgb) - glow(texture2D(u_bounce, v_puv - vec2(v_lim.x, 0.0)).rgb),
+            glow(texture2D(u_bounce, v_puv + vec2(0.0, v_lim.y)).rgb) - glow(texture2D(u_bounce, v_puv - vec2(0.0, v_lim.y)).rgb));
+        float steep = length(rise);
+        float directed = smoothstep(0.004, 0.03, steep);
+        vec2 toward = rise / max(steep, 0.0001);
+        vec3 lamp = vec3(toward * 0.94, 0.34);
+        vec3 normal = vec3(slope, sqrt(max(1.0 - dot(slope, slope), 0.0)));
+        float turn = directed * (max(dot(normal, lamp), 0.0) - lamp.z * normal.z);
+        L *= 1.0 + 2.0 * u_shapeLight.x * max(floor(turn * 3.0 + 0.5) / 3.0, 0.0);
+        vec2 outward = slope / max(length(slope), 0.0001);
+        float facing = step(0.5, dot(outward, toward)) * step(outward.y, 0.4);
+        rim = step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a;
+    }
     L = lampLight(L);
 
     bool cap = v_cls < 1.5 && is(col.rgb, u_capColor);
@@ -91,6 +116,8 @@ void main() {
             || is(col.rgb, vec3(1.0, 0.643, 0.0)) || is(col.rgb, vec3(0.890, 0.353, 0.004))) {
         rgb = col.rgb;
     }
+
+    rgb += L * rim * (0.35 + 0.65 * col.rgb);
 
     if (player) {
         rgb = max(rgb, structRGB * (u_dangerBody / u_structFloor));

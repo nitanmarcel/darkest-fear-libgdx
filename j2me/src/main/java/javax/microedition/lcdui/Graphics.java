@@ -362,6 +362,7 @@ public class Graphics {
             } else {
                 SceneCompositor.routeSprite(img, x, y, clipX - x, clipY - y, clipW, clipH);
             }
+            SceneCompositor.useShape(img);
             Texture upscaled = upscaledSheet(img);
             if (upscaled != null) {
                 batch.draw(upscaled, x, y, iw, ih, 0, 0, upscaled.getWidth(), upscaled.getHeight(), false, true);
