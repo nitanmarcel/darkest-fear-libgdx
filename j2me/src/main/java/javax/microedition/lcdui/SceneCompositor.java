@@ -163,7 +163,7 @@ final class SceneCompositor {
         sh.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
         sh.setUniformf("u_screen", Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT);
         sh.setUniformf("u_lit", lit ? 1f : 0f);
-        sh.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+        sh.setUniformf("u_ambient", AMB_R + LightTuning.ambient, AMB_G + LightTuning.ambient, AMB_B + LightTuning.ambient);
         sh.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
         sh.setUniformf("u_capColor", cap[0], cap[1], cap[2]);
         sh.setUniformf("u_structFloor", STRUCT_FLOOR);
@@ -739,7 +739,8 @@ final class SceneCompositor {
                 floorShader.setUniformf("u_scroll", LightEngine.scrollX(), LightEngine.scrollY());
                 floorShader.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
                 floorShader.setUniformf("u_mapTiles", LightEngine.mapCols(), LightEngine.mapRows());
-                floorShader.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+                floorShader.setUniformf("u_ambient", AMB_R + LightTuning.ambient, AMB_G + LightTuning.ambient,
+                        AMB_B + LightTuning.ambient);
                 Graphics.setEdgeUniforms(floorShader);
                 floorShader.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
                 floorShader.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);

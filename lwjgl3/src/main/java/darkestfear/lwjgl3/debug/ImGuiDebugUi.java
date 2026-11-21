@@ -23,7 +23,7 @@ public class ImGuiDebugUi implements DebugUi {
     private InputProcessor suspendedProcessor;
 
     private final List<DebugPanel> panels = Arrays.asList(
-            new StatusPanel(), new ShowPanel(), new LightingPanel(), new BuffersPanel());
+            new StatusPanel(), new ShowPanel(), new LightingPanel(), new BuffersPanel(), new TestRoomPanel(), new SoundsPanel(), new GameplayPanel());
     private final ImBoolean showMetrics = new ImBoolean(false);
     private final ImBoolean showDemo = new ImBoolean(false);
     private boolean visible = true;

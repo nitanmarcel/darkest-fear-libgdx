@@ -80,6 +80,8 @@ public abstract class Canvas extends Displayable {
                 Graphics.textMuted = GameBridge.inCutscene();
                 try {
                     ((Canvas) d).paint(g);
+                    darkestfear.menu.TestRoom.paint(g);
+                    darkestfear.menu.Cheats.tick();
                 } finally {
                     Graphics.textMuted = false;
                 }
