@@ -7,6 +7,7 @@ import java.util.concurrent.Executors;
 import javax.microedition.media.Control;
 import javax.microedition.media.MediaException;
 import javax.microedition.media.Player;
+import javax.sound.midi.MidiChannel;
 import javax.sound.midi.MidiSystem;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.Sequencer;
@@ -27,7 +28,21 @@ public class PlayerCompat implements Player {
 
     @Override
     public Control getControl(String controlType) {
-        return new VolumeControlCompat(_Synthesizer);
+        return new VolumeControlCompat(this);
+    }
+
+    void setVolume(int level) {
+        _Executor.execute(() -> {
+            if (_Synthesizer == null || !_Synthesizer.isOpen()) {
+                return;
+            }
+            int volume = (int) Math.round(127 * Math.sqrt(level / 100.0));
+            for (MidiChannel channel : _Synthesizer.getChannels()) {
+                if (channel != null) {
+                    channel.controlChange(7, volume);
+                }
+            }
+        });
     }
 
     @Override
@@ -88,7 +103,7 @@ public class PlayerCompat implements Player {
     public void setLoopCount(int count) {
         _Executor.execute(() -> {
             if (_Sequencer != null)
-                _Sequencer.setLoopCount(count);
+                _Sequencer.setLoopCount(count < 0 ? Sequencer.LOOP_CONTINUOUSLY : Math.max(0, count - 1));
         });
     }
 

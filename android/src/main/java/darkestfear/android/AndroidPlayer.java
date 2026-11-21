@@ -121,7 +121,8 @@ public class AndroidPlayer implements Player {
     public void start() throws MediaException {
         _Executor.execute(() -> {
             if (_Player != null && _Prepared) {
-                _RemainingLoops = _LoopCount;
+                _RemainingLoops = Math.max(0, _LoopCount - 1);
+                _Player.setLooping(_LoopCount < 0);
                 _Player.start();
             }
         });
