@@ -1,7 +1,6 @@
 dependencies {
     api "com.badlogicgames.gdx:gdx:$gdxVersion"
     api "com.badlogicgames.gdx-controllers:gdx-controllers-core:2.2.4"
-    api files("$rootDir/libs/darkest_fear_v155.jar")
 
     // Stubs must be on the runtime classpath too, else NoClassDefFoundError.
     implementation project(':j2me')

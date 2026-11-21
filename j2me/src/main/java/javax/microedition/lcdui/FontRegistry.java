@@ -8,7 +8,6 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator.FreeTypeFont
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 public final class FontRegistry {
 
@@ -17,8 +16,6 @@ public final class FontRegistry {
     private static int sizeLarge  = 22;
 
     private static final List<BitmapFont> CREATED = new ArrayList<>();
-
-    private static volatile Thread glThread;
 
     private FontRegistry() {}
 
@@ -29,39 +26,7 @@ public final class FontRegistry {
     }
 
     static BitmapFont resolve(final int face, final int style, final int size) {
-        if (Thread.currentThread() == glThread) {
-            return create(face, style, size);
-        }
-
-        final BitmapFont[] result = new BitmapFont[1];
-        final Throwable[] error = new Throwable[1];
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        Gdx.app.postRunnable(new Runnable() {
-            @Override
-            public void run() {
-                glThread = Thread.currentThread();
-                try {
-                    result[0] = create(face, style, size);
-                } catch (Throwable t) {
-                    error[0] = t;
-                } finally {
-                    latch.countDown();
-                }
-            }
-        });
-
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RuntimeException("Interrupted while creating font", e);
-        }
-
-        if (error[0] != null) {
-            throw new RuntimeException("Font creation failed", error[0]);
-        }
-        return result[0];
+        return GlThread.call(() -> create(face, style, size));
     }
 
     private static BitmapFont create(int face, int style, int size) {

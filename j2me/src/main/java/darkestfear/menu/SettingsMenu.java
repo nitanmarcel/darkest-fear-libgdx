@@ -86,6 +86,7 @@ final class SettingsMenu {
 
     private static Setting[] settings;
     private static boolean listedGamepad;
+    private static boolean removeArmed;
     private static int[] rowY;
     private static int contentHeight;
     private static int selected;
@@ -153,6 +154,14 @@ final class SettingsMenu {
                 "Music and sound effects."));
         list.add(new Setting("Game", MenuOverlay.textOr(18, "Reset Game"), null, null, v -> GameBridge.openMenu(9),
                 "Deletes your saved progress."));
+        Setting remove = new Setting("Game", "Remove game file", null, null, v -> {
+            if (removeArmed) {
+                GameJar.remove();
+            }
+            removeArmed = true;
+        }, "Removes the original game file and closes the app. Your progress is kept.");
+        remove.shown = () -> removeArmed ? "Press again" : "";
+        list.add(remove);
         settings = list.toArray(new Setting[0]);
 
         rowY = new int[settings.length];
@@ -170,6 +179,7 @@ final class SettingsMenu {
 
     static void opened() {
         GameInput.stopCapture();
+        removeArmed = false;
         selected = 0;
         scrollY = 0;
     }

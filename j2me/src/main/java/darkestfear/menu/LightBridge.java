@@ -106,7 +106,7 @@ public final class LightBridge {
             return false;
         }
         try {
-            resCls = Class.forName("b", false, LightBridge.class.getClassLoader());
+            resCls = Class.forName("b", false, GameJar.loader());
             for (Field f : resCls.getDeclaredFields()) {
                 if (f.getType() == short[][].class) {
                     f.setAccessible(true);
@@ -234,7 +234,7 @@ public final class LightBridge {
             return;
         }
         try {
-            ClassLoader cl = LightBridge.class.getClassLoader();
+            ClassLoader cl = GameJar.loader();
             Class<?> appCls = Class.forName("l", false, cl);
             Class<?> screenCls = Class.forName("r", false, cl);
             levelCls = Class.forName("i", false, cl);
@@ -371,7 +371,7 @@ public final class LightBridge {
         }
         try {
             if (fScreenW == null) {
-                Class<?> screenCls = Class.forName("r", false, LightBridge.class.getClassLoader());
+                Class<?> screenCls = Class.forName("r", false, GameJar.loader());
                 fScreenW = declaredField(screenCls, "b", int.class);
                 fScreenH = declaredField(screenCls, "c", int.class);
                 fScreenW.setAccessible(true);
@@ -382,10 +382,10 @@ public final class LightBridge {
                     fScreenW = null;
                     return;
                 }
-                Class<?> cutsceneCls = Class.forName("p", false, LightBridge.class.getClassLoader());
+                Class<?> cutsceneCls = Class.forName("p", false, GameJar.loader());
                 new Thread(() -> {
                     try {
-                        Class.forName("p", true, LightBridge.class.getClassLoader());
+                        Class.forName("p", true, GameJar.loader());
                     } catch (Throwable ignored) {
                     }
                 }).start();
@@ -900,7 +900,7 @@ public final class LightBridge {
 
     public static boolean jumpToLevel(int level) {
         try {
-            ClassLoader cl = LightBridge.class.getClassLoader();
+            ClassLoader cl = GameJar.loader();
             Field current = null;
             for (Field f : Class.forName("q", false, cl).getDeclaredFields()) {
                 if (f.getName().equals("b") && f.getType() == int.class

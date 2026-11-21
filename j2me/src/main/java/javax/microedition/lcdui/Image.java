@@ -41,9 +41,9 @@ public class Image {
     }
 
     public static Image createImage(String name) throws IOException {
-        String path = name.startsWith("/") ? name : "/" + name;
+        String path = name.startsWith("/") ? name.substring(1) : name;
         byte[] data;
-        try (InputStream in = Image.class.getResourceAsStream(path)) {
+        try (InputStream in = darkestfear.menu.GameJar.loader().getResourceAsStream(path)) {
             if (in == null) {
                 throw new IOException("resource not found: " + path);
             }

@@ -58,22 +58,22 @@ public final class GameBridge {
             return;
         }
         try {
-            Class<?> appCls = Class.forName("l");
-            menuCls = Class.forName("f");
-            levelCls = Class.forName("i", false, GameBridge.class.getClassLoader());
-            cutsceneCls = Class.forName("p", false, GameBridge.class.getClassLoader());
-            popupCls = Class.forName("o", false, GameBridge.class.getClassLoader());
-            overlayCls = Class.forName("a", false, GameBridge.class.getClassLoader());
+            Class<?> appCls = Class.forName("l", true, GameJar.loader());
+            menuCls = Class.forName("f", true, GameJar.loader());
+            levelCls = Class.forName("i", false, GameJar.loader());
+            cutsceneCls = Class.forName("p", false, GameJar.loader());
+            popupCls = Class.forName("o", false, GameJar.loader());
+            overlayCls = Class.forName("a", false, GameJar.loader());
             fOverlayEvent = findField(overlayCls, "a", int.class);
             fOverlayEvent.setAccessible(true);
-            Class<?> screenCls = Class.forName("r");
+            Class<?> screenCls = Class.forName("r", true, GameJar.loader());
             fPendingScreen = findField(appCls, "b", screenCls);
             fPendingScreen.setAccessible(true);
-            Class<?> resCls = Class.forName("b");
-            Class<?> gcCls = Class.forName("q");
-            Class<?> soundCls = Class.forName("k");
-            Class<?> itemCls = Class.forName("h");
-            Class<?> textCls = Class.forName("d");
+            Class<?> resCls = Class.forName("b", true, GameJar.loader());
+            Class<?> gcCls = Class.forName("q", true, GameJar.loader());
+            Class<?> soundCls = Class.forName("k", true, GameJar.loader());
+            Class<?> itemCls = Class.forName("h", true, GameJar.loader());
+            Class<?> textCls = Class.forName("d", true, GameJar.loader());
 
             mGetCurrentScreen = find(appCls, "a", new Class<?>[]{}, screenCls, true);
             mEnqueue = appCls.getDeclaredMethod("a", int.class, Object.class);

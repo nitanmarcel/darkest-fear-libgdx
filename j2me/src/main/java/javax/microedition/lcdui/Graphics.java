@@ -270,6 +270,10 @@ public class Graphics {
         return (int) (Gdx.graphics.getWidth() / wideUnit());
     }
 
+    public static int wideHeight() {
+        return (int) (Gdx.graphics.getHeight() / wideUnit());
+    }
+
     public static boolean wide() {
         return wideWidth() >= WIDE_MIN;
     }

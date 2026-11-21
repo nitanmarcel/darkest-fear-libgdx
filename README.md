@@ -5,53 +5,76 @@ original game code on top of a small J2ME → libGDX compatibility layer.
 
 ![MainMenu](public/main_menu.png)
 ![Gameplay](public/gameplay.png)
+![Android landscape](public/android_landscape.png)
 ![Android](public/android_gameplay.png)
+
+## Play
+
+The original game is **not** included. You must supply the **v1.55** JAR
+(240x320) yourself. The game asks for it the first time it starts.
+
+Builds for Linux, Windows, macOS and Android are on the
+[Releases](../../releases) page.
+
+## Controls
+
+| Action | Keyboard | Gamepad | Touch |
+| --- | --- | --- | --- |
+| Move | WASD / Arrow keys | Stick / D-pad | Stick |
+| Interact | E / Space / Enter | A | Tap |
+| Pause / Back | Q / Esc | B / Start | Pause button |
+
+Keys can be changed in Settings.
 
 ## Build
 
-The original game is **not** included. You must supply the **v1.55** JAR yourself
-and place it at:
+### Requirements
 
-```
-./libs/darkest_fear_v155.jar
-```
+- JDK 21
+- Android SDK, for the Android build (set `ANDROID_HOME`, or add an `sdk.dir`
+  entry to `local.properties`)
 
-Requires JDK 21.
-
-### Desktop
+### Launch in debug mode
 
 ```
 ./gradlew lwjgl3:run
 ```
 
-### Android
+### Package a standalone build
 
-Requires the Android SDK (set `ANDROID_HOME`, or add an `sdk.dir` entry to
-`local.properties`).
-
-Build a debug APK:
+Linux:
 
 ```
-./gradlew :android:assembleDebug
+./gradlew lwjgl3:packageLinuxX64
 ```
 
-The APK is written to `android/build/outputs/apk/debug/android-debug.apk`.
-
-Build and install directly to a connected device:
+Windows:
 
 ```
-./gradlew :android:installDebug
+./gradlew lwjgl3:packageWinX64
 ```
 
-## Controls
+macOS (Intel):
 
-| Key | Action |
-| --- | --- |
-| Arrow keys | Navigate |
-| Enter / Space | Select |
-| Q | Left soft key |
-| E | Right soft key |
-| 0 – 9 | Number keys |
+```
+./gradlew lwjgl3:packageMacX64
+```
+
+macOS (Apple Silicon):
+
+```
+./gradlew lwjgl3:packageMacM1
+```
+
+The zips are written to `lwjgl3/build/construo/dist/`.
+
+Android:
+
+```
+./gradlew android:assembleRelease
+```
+
+The APK is written to `android/build/outputs/apk/release/`.
 
 ## Status
 
