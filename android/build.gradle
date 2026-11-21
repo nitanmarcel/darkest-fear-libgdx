@@ -41,6 +41,7 @@ android {
 
     androidResources {
         noCompress += 'ttf'
+        ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!hs_err_pid*'
     }
 
     sourceSets {
