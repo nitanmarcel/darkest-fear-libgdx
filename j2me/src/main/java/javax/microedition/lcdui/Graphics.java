@@ -52,6 +52,7 @@ public class Graphics {
     private static final String LIGHT_STORE = "df_light";
     private static final String CUES_STORE = "df_cues";
     private static final String UPSCALE_STORE = "df_upscale";
+    private static final String FULLSCREEN_STORE = "df_fullscreen";
     static boolean lightingEnabled = true;
     static boolean cuesEnabled = true;
     static boolean upscaleEnabled = true;
@@ -422,6 +423,14 @@ public class Graphics {
     public static void setUpscaleEnabled(boolean enabled) {
         upscaleEnabled = enabled;
         saveFlag(UPSCALE_STORE, enabled);
+    }
+
+    public static boolean isFullscreenSaved() {
+        return loadFlag(FULLSCREEN_STORE, false);
+    }
+
+    public static void saveFullscreen(boolean fullscreen) {
+        saveFlag(FULLSCREEN_STORE, fullscreen);
     }
 
     private static boolean loadFlag(String store, boolean def) {

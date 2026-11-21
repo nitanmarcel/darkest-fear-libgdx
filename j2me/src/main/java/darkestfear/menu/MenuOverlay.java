@@ -48,6 +48,7 @@ public final class MenuOverlay {
     private static int mirrorCount;
 
     private static volatile boolean pendingFullscreen;
+    private static boolean fullscreenRestored;
     private static javax.microedition.lcdui.Image splashImage;
     private static short[] splashAttr;
     private static int windowedWidth = 800;
@@ -91,6 +92,10 @@ public final class MenuOverlay {
     }
 
     public static void applyPending() {
+        if (!fullscreenRestored) {
+            fullscreenRestored = true;
+            pendingFullscreen = isDesktop() && Graphics.isFullscreenSaved() && !Gdx.graphics.isFullscreen();
+        }
         if (!pendingFullscreen) {
             return;
         }
@@ -102,6 +107,7 @@ public final class MenuOverlay {
             windowedHeight = Gdx.graphics.getHeight();
             Gdx.graphics.setFullscreenMode(Gdx.graphics.getDisplayMode());
         }
+        Graphics.saveFullscreen(Gdx.graphics.isFullscreen());
     }
 
     private static final int TITLE_GAP = 30;
