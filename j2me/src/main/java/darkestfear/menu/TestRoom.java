@@ -45,7 +45,7 @@ public final class TestRoom {
         return original != null;
     }
 
-    public static boolean load(int level) {
+    public static boolean load(int level, boolean lights) {
         try {
             Object[] resources = resources();
             if (original == null) {
@@ -56,7 +56,7 @@ public final class TestRoom {
             for (int i = 0; at < original.length; i++) {
                 int size = 2 + original[at] * original[at + 1];
                 if (i == level) {
-                    maps.write(room());
+                    maps.write(room(lights));
                 } else {
                     maps.write(original, at, size);
                 }
@@ -92,7 +92,7 @@ public final class TestRoom {
             g.setClip(0, 0, Graphics.VIRTUAL_WIDTH, s.playH);
             int region = 0, x = 0, y = 0, rowHeight = 0;
             for (int id = 0; id < sheetOf.length && region < GALLERY.length; id++) {
-                if (sheetOf[id] == 0) {
+                if (sheetOf[id] == 0 || LightBridge.isTileSprite(id)) {
                     continue;
                 }
                 short[] a = LightBridge.spriteAttr(id);
@@ -181,7 +181,7 @@ public final class TestRoom {
         }
     }
 
-    private static byte[] room() {
+    private static byte[] room(boolean lights) {
         byte[][] grid = new byte[HEIGHT][WIDTH];
         for (int row = 0; row < HEIGHT; row++) {
             grid[row][0] = -1;
@@ -206,7 +206,7 @@ public final class TestRoom {
                 grid[row[0]][row[i]] = (byte) row[i + 1];
             }
         }
-        for (int row = LIGHT_STEP / 2; row < HEIGHT - 1; row += LIGHT_STEP) {
+        for (int row = LIGHT_STEP / 2; lights && row < HEIGHT - 1; row += LIGHT_STEP) {
             for (int col = LIGHT_STEP / 2; col < WIDTH - 1; col += LIGHT_STEP) {
                 if (grid[row][col] == 0) {
                     grid[row][col] = LIGHT;

@@ -21,6 +21,7 @@ public final class GameJar {
 
     private static ClassLoader loader;
     private static File file;
+    public static Runnable packChooser;
 
     private GameJar() {
     }
@@ -32,6 +33,10 @@ public final class GameJar {
     public static void use(ClassLoader gameLoader, File installed) {
         loader = gameLoader;
         file = installed;
+    }
+
+    public static File file() {
+        return file;
     }
 
     static void remove() {

@@ -21,6 +21,8 @@ uniform float u_lit;
 uniform vec3 u_ambient;
 uniform vec3 u_bounceGain;
 uniform vec3 u_capColor;
+uniform float u_capRange;
+uniform vec3 u_glow[4];
 uniform float u_structFloor;
 uniform float u_curveF[8];
 uniform float u_actorPixel;
@@ -112,7 +114,7 @@ void main() {
     }
     L = lampLight(L) * edgeLight(v_pos);
 
-    bool cap = v_cls < 1.5 && is(col.rgb, u_capColor);
+    bool cap = v_cls < 1.5 && all(lessThan(abs(col.rgb - u_capColor), vec3(u_capRange)));
     if (cap) {
         L = vec3(0.0);
     }
@@ -121,8 +123,7 @@ void main() {
     vec3 structRGB = mix(vec3(luma), col.rgb, 0.3) * vec3(0.8, 0.9, 1.1) * u_structFloor;
     if (v_cls < 2.5) {
         rgb = max(rgb, structRGB);
-    } else if (is(col.rgb, vec3(1.0, 0.988, 0.961)) || is(col.rgb, vec3(1.0, 0.824, 0.0))
-            || is(col.rgb, vec3(1.0, 0.643, 0.0)) || is(col.rgb, vec3(0.890, 0.353, 0.004))) {
+    } else if (is(col.rgb, u_glow[0]) || is(col.rgb, u_glow[1]) || is(col.rgb, u_glow[2]) || is(col.rgb, u_glow[3])) {
         rgb = col.rgb;
     }
 

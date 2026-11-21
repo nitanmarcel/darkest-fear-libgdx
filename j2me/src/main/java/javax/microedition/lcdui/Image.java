@@ -10,10 +10,11 @@ import java.io.InputStream;
 public class Image {
 
     private final boolean mutable;
-    private final int width;
-    private final int height;
+    private int width;
+    private int height;
 
-    private final Pixmap pixmap;
+    private Pixmap pixmap;
+    private boolean packed;
     private Texture texture;
     private boolean dirty;
     private Texture upscaled;
@@ -80,6 +81,31 @@ public class Image {
 
     boolean isMutable() {
         return mutable;
+    }
+
+    boolean packed() {
+        return packed;
+    }
+
+    void repack(Pixmap sheet, Texture detailed, Texture surface) {
+        if (texture != null) {
+            texture.dispose();
+            texture = null;
+        }
+        if (upscaled != null) {
+            upscaled.dispose();
+            shape.dispose();
+        }
+        if (packed) {
+            pixmap.dispose();
+        }
+        pixmap = sheet;
+        width = sheet.getWidth();
+        height = sheet.getHeight();
+        upscaled = detailed;
+        shape = surface;
+        upscaleTried = detailed != null;
+        packed = detailed != null;
     }
 
     void markDirty() {

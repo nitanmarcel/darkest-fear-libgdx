@@ -11,6 +11,7 @@ final class TestRoomPanel implements DebugPanel {
 
     private final ImBoolean open = new ImBoolean(false);
     private final int[] level = {2};
+    private final ImBoolean lights = new ImBoolean(true);
 
     @Override
     public String title() {
@@ -27,8 +28,9 @@ final class TestRoomPanel implements DebugPanel {
         ImGui.textWrapped("Replaces the target level with a room containing every tile and sprite. "
                 + "The room uses the target level's theme.");
         ImGui.sliderInt("Target level", level, 0, LEVELS - 1);
+        ImGui.checkbox("Lights", lights);
         if (ImGui.button("Load")) {
-            TestRoom.load(level[0]);
+            TestRoom.load(level[0], lights.get());
         }
         ImGui.sameLine();
         if (ImGui.button("Restore")) {
