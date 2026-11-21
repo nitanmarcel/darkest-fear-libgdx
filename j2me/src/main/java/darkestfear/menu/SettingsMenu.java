@@ -37,6 +37,7 @@ final class SettingsMenu {
         Check available;
         Text unavailableHelp;
         Text shown;
+        Text liveHelp;
 
         Setting(String section, String label, String[] values, Getter getter, Setter setter, String help) {
             this.section = section;
@@ -55,6 +56,10 @@ final class SettingsMenu {
             available = check;
             unavailableHelp = why;
             return this;
+        }
+
+        String help() {
+            return !usable() ? unavailableHelp.get() : liveHelp != null ? liveHelp.get() : help;
         }
 
         boolean usable() {
@@ -113,6 +118,10 @@ final class SettingsMenu {
                 () -> Graphics.isCuesEnabled() ? 1 : 0, v -> Graphics.setCuesEnabled(v == 1),
                 "Marks doors, closets and unlit lamps, and warns you when the dark is about to hurt.")
                 .needs(Graphics::isLightingEnabled, "Needs Lighting set to Enhanced."));
+        Setting packs = new Setting("Graphics", "Resource packs", null, null, v -> PackMenu.open(),
+                "Replace the game's pictures with packs you add. Packs higher in the list win.");
+        packs.shown = PackMenu::summary;
+        list.add(packs);
         String needsWide = MenuOverlay.isDesktop() ? "Needs a wider window." : "Turn your phone sideways to use this.";
         list.add(new Setting("Display", "View", new String[] {"Original", "Expanded"},
                 () -> Graphics.isExpandedView() ? 1 : 0, v -> Graphics.setExpandedView(v == 1),
@@ -179,6 +188,7 @@ final class SettingsMenu {
 
     static void opened() {
         GameInput.stopCapture();
+        PackMenu.close();
         removeArmed = false;
         selected = 0;
         scrollY = 0;
@@ -189,6 +199,10 @@ final class SettingsMenu {
         boolean panel = panelTop > 0;
         listTop = panel ? PANEL_LIST_TOP : MenuTheme.LIST_TOP;
         listBottom = panel || pane > 0 ? PANEL_LIST_BOTTOM : LIST_BOTTOM;
+        if (PackMenu.isOpen()) {
+            PackMenu.render(g, panelTop, listTop, listBottom, pane);
+            return;
+        }
         Font bold = MenuTheme.bold();
         Font plain = MenuTheme.plain();
         int top = Graphics.TOP;
@@ -251,7 +265,7 @@ final class SettingsMenu {
             g.setFont(plain);
             g.setColor(MenuTheme.COLOR_TEXT);
             int y = MenuTheme.LIST_TOP + 30;
-            for (String line : MenuOverlay.wrapText(plain, current.usable() ? current.help : current.unavailableHelp.get(), pane)) {
+            for (String line : MenuOverlay.wrapText(plain, current.help(), pane)) {
                 g.drawString(line, x, y, top | Graphics.LEFT);
                 y += HELP_STEP;
             }
@@ -273,7 +287,7 @@ final class SettingsMenu {
             g.fillRect(MARGIN, listBottom + 3, W - 2 * MARGIN, 1);
             g.setFont(plain);
             g.setColor(MenuTheme.COLOR_TEXT);
-            String[] help = MenuOverlay.wrapText(plain, current.usable() ? current.help : current.unavailableHelp.get(), W - 2 * TEXT_X);
+            String[] help = MenuOverlay.wrapText(plain, current.help(), W - 2 * TEXT_X);
             for (int k = 0; k < help.length; k++) {
                 g.drawString(help[k], TEXT_X, HELP_Y + k * HELP_STEP, top | Graphics.LEFT);
             }
@@ -281,6 +295,10 @@ final class SettingsMenu {
     }
 
     static boolean keyPressed(int code) {
+        if (PackMenu.isOpen()) {
+            PackMenu.keyPressed(code);
+            return true;
+        }
         Setting[] all = settings();
         switch (code) {
             case Keys.UP:
@@ -350,6 +368,10 @@ final class SettingsMenu {
     static void tap(float vx, float vy) {
         settings();
         boolean panel = listTop != MenuTheme.LIST_TOP;
+        if (PackMenu.isOpen()) {
+            PackMenu.tap(vx, vy, MenuTheme.onBack(vx, vy, panel ? PANEL_TOP : 0, panel ? PANEL_LIST_TOP : MenuTheme.RULE_Y));
+            return;
+        }
         if (MenuTheme.onBack(vx, vy, panel ? PANEL_TOP : 0, panel ? PANEL_LIST_TOP : MenuTheme.RULE_Y)) {
             MenuOverlay.back();
             return;
@@ -366,6 +388,10 @@ final class SettingsMenu {
 
     static void hover(float vx, float vy) {
         settings();
+        if (PackMenu.isOpen()) {
+            PackMenu.hover(vx, vy);
+            return;
+        }
         int row = rowAt(vx, vy);
         if (row != -1 && row != selected) {
             GameInput.stopCapture();
@@ -379,6 +405,10 @@ final class SettingsMenu {
 
     static void scrollBy(int virtualPixels) {
         settings();
+        if (PackMenu.isOpen()) {
+            PackMenu.scrollBy(virtualPixels);
+            return;
+        }
         scrollY = Math.max(0, Math.min(scrollY + virtualPixels, Math.max(0, contentHeight - (listBottom - listTop))));
     }
 }

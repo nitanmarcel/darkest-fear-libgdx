@@ -66,7 +66,7 @@ public class DarkestFearGame extends ApplicationAdapter {
 
     private void choose() {
         if (!SetupScreen.busy) {
-            files.choose(this::open);
+            files.choose("jar", this::open);
         }
     }
 
@@ -121,6 +121,8 @@ public class DarkestFearGame extends ApplicationAdapter {
 
     private void start(ClassLoader loader) {
         GameJar.use(loader, new File(files.dir(), JAR));
+        GameJar.packChooser = () -> files.choose("zip",
+                chosen -> Gdx.app.postRunnable(() -> javax.microedition.lcdui.ResourcePack.install(chosen)));
         J2meInput input = new J2meInput();
         Gdx.input.setCatchKey(Keys.BACK, true);
         Gdx.input.setInputProcessor(new InputMultiplexer(new GestureDetector(input), input));
