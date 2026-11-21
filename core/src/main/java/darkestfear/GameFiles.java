@@ -10,7 +10,7 @@ public interface GameFiles {
 
     File dir();
 
-    void choose(Chosen chosen);
+    void choose(String extension, Chosen chosen);
 
     ClassLoader load(File jar) throws Exception;
 }

@@ -748,6 +748,22 @@ public final class LightBridge {
         }
     }
 
+    public static short[][] spriteTable() {
+        try {
+            return fSpriteAttr == null ? null : (short[][]) fSpriteAttr.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    public static Object[] spriteSheets() {
+        try {
+            return fSpriteImages == null ? null : (Object[]) fSpriteImages.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public static short[] spriteAttr(int spriteId) {
         if (fSpriteAttr == null) {
             return null;

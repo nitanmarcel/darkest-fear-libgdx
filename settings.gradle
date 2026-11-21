@@ -10,4 +10,4 @@ pluginManagement {
 }
 
 rootProject.name = 'DarkestFear'
-include 'core', 'lwjgl3', 'j2me', 'android'
+include 'core', 'lwjgl3', 'j2me', 'android', 'converter'
