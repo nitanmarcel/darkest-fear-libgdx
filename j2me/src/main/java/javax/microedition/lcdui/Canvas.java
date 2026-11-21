@@ -53,6 +53,7 @@ public abstract class Canvas extends Displayable {
     public static void renderFrame(Graphics g) {
         MenuOverlay.applyPending();
         MenuOverlay.keepSplash();
+        GameBridge.keepOverlay();
         Displayable d = Display.current();
         boolean preview = MenuOverlay.showsGame();
         Object boxed = GameBridge.popupLevel();

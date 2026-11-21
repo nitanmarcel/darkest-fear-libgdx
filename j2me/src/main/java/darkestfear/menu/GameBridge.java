@@ -16,6 +16,7 @@ public final class GameBridge {
     private static Class<?> popupCls;
     private static Class<?> overlayCls;
     private static Field fOverlayEvent;
+    private static Field fOverlayRedraw;
     private static Field fPendingScreen;
 
     private static Method mGetCurrentScreen;
@@ -71,6 +72,8 @@ public final class GameBridge {
             overlayCls = Class.forName("a", false, GameJar.loader());
             fOverlayEvent = findField(overlayCls, "a", int.class);
             fOverlayEvent.setAccessible(true);
+            fOverlayRedraw = findField(overlayCls, "b", boolean.class);
+            fOverlayRedraw.setAccessible(true);
             Class<?> screenCls = Class.forName("r", true, GameJar.loader());
             fPendingScreen = findField(appCls, "b", screenCls);
             fPendingScreen.setAccessible(true);
@@ -166,6 +169,10 @@ public final class GameBridge {
 
     public static boolean inCutscene() {
         return currentScreenIs(cutsceneCls);
+    }
+
+    public static boolean inOverlay() {
+        return currentScreenIs(overlayCls);
     }
 
     static boolean inPopup() {
@@ -269,6 +276,19 @@ public final class GameBridge {
             return screen != null && type.isInstance(screen);
         } catch (Throwable t) {
             return false;
+        }
+    }
+
+    public static void keepOverlay() {
+        if (!available()) {
+            return;
+        }
+        try {
+            Object screen = mGetCurrentScreen.invoke(null);
+            if (screen != null && overlayCls.isInstance(screen)) {
+                fOverlayRedraw.setBoolean(screen, true);
+            }
+        } catch (Throwable t) {
         }
     }
 

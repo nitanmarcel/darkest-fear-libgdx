@@ -365,7 +365,7 @@ public class Graphics {
             playAreaH = ph;
         }
         darkestfear.menu.LightBridge.normalizeIdlePlayerColumn();
-        flatFrame = darkestfear.menu.GameBridge.inCutscene();
+        flatFrame = darkestfear.menu.GameBridge.inCutscene() || darkestfear.menu.GameBridge.inOverlay();
         gameTargetActive = true;
         SceneCompositor.begin();
     }
