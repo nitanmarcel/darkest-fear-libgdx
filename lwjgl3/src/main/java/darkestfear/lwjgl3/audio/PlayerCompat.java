@@ -17,6 +17,7 @@ public class PlayerCompat implements Player {
     private Sequencer _Sequencer;
     private Synthesizer _Synthesizer;
     private Sequence _Sequence;
+    private volatile boolean _Started;
 
     private final ExecutorService _Executor = Executors.newSingleThreadExecutor();
 
@@ -50,6 +51,7 @@ public class PlayerCompat implements Player {
 
     @Override
     public void start() throws MediaException {
+        _Started = true;
         _Executor.execute(() -> {
             if (_Sequencer != null)
                 _Sequencer.start();
@@ -58,6 +60,7 @@ public class PlayerCompat implements Player {
 
     @Override
     public void stop() throws MediaException {
+        _Started = false;
         _Executor.execute(() -> {
             if (_Sequencer != null)
                 _Sequencer.stop();
@@ -66,14 +69,17 @@ public class PlayerCompat implements Player {
 
     @Override
     public void deallocate() {
-        _Sequencer = null;
     }
 
     @Override
     public void close() {
+        _Started = false;
         _Executor.execute(() -> {
             if (_Sequencer != null)
                 _Sequencer.close();
+            if (_Synthesizer != null)
+                _Synthesizer.close();
+            _Sequencer = null;
         });
         _Executor.shutdown();
     }
@@ -88,6 +94,6 @@ public class PlayerCompat implements Player {
 
     @Override
     public int getState() {
-        return _Sequencer != null && _Sequencer.isRunning() ? 1 : 0;
+        return _Started ? 1 : 0;
     }
 }

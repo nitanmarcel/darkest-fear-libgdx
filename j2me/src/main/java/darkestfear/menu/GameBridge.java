@@ -24,7 +24,12 @@ public final class GameBridge {
     private static Method mExit;
     private static Method mLoad;
     private static Method mGetText;
+    private static final int MENU_MUSIC = 28;
+
     private static Method mSetSound;
+    private static Method mLoadSounds;
+    private static Method mPlaySound;
+    private static Field fController;
     private static Method mSetSelected;
     private static Field fMenuId;
     private static Field fCanContinue;
@@ -82,6 +87,9 @@ public final class GameBridge {
             mLoad = find(menuCls, "a", new Class<?>[]{int.class}, menuCls, true);
             mGetText = find(resCls, "a", new Class<?>[]{int.class}, String.class, true);
             mSetSound = find(soundCls, "a", new Class<?>[]{boolean.class}, void.class, true);
+            mPlaySound = find(soundCls, "a", new Class<?>[]{int.class, int.class}, void.class, true);
+            mLoadSounds = find(gcCls, "c", new Class<?>[]{}, void.class, false);
+            fController = findField(menuCls, "a", gcCls);
             mSetSelected = find(menuCls, "b", new Class<?>[]{int.class}, void.class, false);
             fMenuId = menuCls.getDeclaredField("f");
             fCanContinue = findField(gcCls, "d", boolean.class);
@@ -281,6 +289,11 @@ public final class GameBridge {
         }
         try {
             mSetSound.invoke(null, enabled);
+            mLoadSounds.setAccessible(true);
+            mPlaySound.setAccessible(true);
+            fController.setAccessible(true);
+            mLoadSounds.invoke(fController.get(null));
+            mPlaySound.invoke(null, MENU_MUSIC, -1);
         } catch (Throwable t) {
         }
     }
