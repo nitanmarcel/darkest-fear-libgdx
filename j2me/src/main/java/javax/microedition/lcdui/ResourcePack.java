@@ -64,7 +64,7 @@ public final class ResourcePack {
 
     private static final class Pack {
         File file;
-        String name, problem;
+        String name, id, problem;
         boolean enabled = true;
         int scale;
         final Map<String, Pixmap> images = new HashMap<>();
@@ -231,28 +231,39 @@ public final class ResourcePack {
     }
 
     public static void install(File source) {
+        ensure();
         File folder = folder();
         folder.mkdirs();
-        File target;
-        int n = 1;
-        do {
-            target = new File(folder, "pack-" + n++ + ".zip");
-        } while (target.exists());
-        try (InputStream in = new java.io.FileInputStream(source);
-             java.io.OutputStream out = new java.io.FileOutputStream(target)) {
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
+        String id = id(source);
+        File target = null;
+        for (Pack pack : packs) {
+            if (id != null && id.equals(pack.id)) {
+                target = pack.file;
             }
+        }
+        boolean update = target != null;
+        for (int n = 1; target == null || (!update && target.exists()); n++) {
+            target = new File(folder, "pack-" + n + ".zip");
+        }
+        File part = new File(folder, target.getName() + ".part");
+        try {
+            java.nio.file.Files.copy(source.toPath(), part.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            java.nio.file.Files.move(part.toPath(), target.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             Gdx.app.error("ResourcePack", "copying " + source + " failed", e);
-            target.delete();
+            part.delete();
             return;
         }
-        ensure();
-        save(target.getName());
+        save(update ? null : target.getName());
         reload();
+    }
+
+    private static String id(File file) {
+        try (ZipFile zip = new ZipFile(file); InputStream in = zip.getInputStream(zip.getEntry("pack.json"))) {
+            return new JsonReader().parse(in).getString("id", null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static File folder() {
@@ -350,6 +361,10 @@ public final class ResourcePack {
             }
             int packScale = json.getInt("scale", 0);
             pack.name = json.getString("name", file.getName());
+            pack.id = json.getString("id", null);
+            if (pack.id == null || pack.id.isEmpty()) {
+                throw new IOException("it has no id");
+            }
             if (json.getInt("format", 0) != 1 || packScale < 1 || SpriteUpscaler.SCALE % packScale != 0) {
                 throw new IOException("its format or scale isn't supported");
             }

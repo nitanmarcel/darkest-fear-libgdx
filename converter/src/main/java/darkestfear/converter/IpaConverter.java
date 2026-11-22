@@ -252,7 +252,7 @@ public final class IpaConverter {
 
     private String manifest() throws IOException {
         Map<String, List<String[]>> mapping = mapping();
-        StringBuilder json = new StringBuilder("{\n  \"format\": 1,\n  \"name\": \"Darkest Fear iPhone art\",\n  \"scale\": "
+        StringBuilder json = new StringBuilder("{\n  \"format\": 1,\n  \"id\": \"darkest-fear-iphone\",\n  \"name\": \"Darkest Fear iPhone art\",\n  \"scale\": "
                 + SCALE + ",\n\n  \"sprites\": {\n");
         Map<String, String[]> themed = new LinkedHashMap<>();
         List<String> entries = new ArrayList<>();
