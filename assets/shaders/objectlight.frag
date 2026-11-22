@@ -31,6 +31,7 @@ uniform float u_debug;
 uniform float u_dangerBody;
 uniform vec3 u_cueColor;
 uniform sampler2D u_shape;
+uniform sampler2D u_arrive;
 uniform vec3 u_shapeLight;
 uniform float u_propLift;
 varying vec2 v_pos;
@@ -97,7 +98,7 @@ void main() {
     float rim = 0.0;
     bool figure = player || (v_cls > 2.5 && v_cls < 3.5);
     bool prop = (v_cls > 1.5 && v_cls < 2.5) || (v_cls > 3.5 && v_cls < 4.5);
-    if (figure || prop) {
+    if (figure) {
         vec4 surface = texture2D(u_shape, v_texCoords);
         vec2 slope = surface.rg * 2.0 - 1.0;
         slope *= step(0.02, length(slope));
@@ -110,10 +111,18 @@ void main() {
         vec3 lamp = vec3(toward * 0.94, 0.34);
         vec3 normal = vec3(slope, sqrt(max(1.0 - dot(slope, slope), 0.0)));
         float turn = directed * (max(dot(normal, lamp), 0.0) - lamp.z * normal.z);
-        L *= 1.0 + 2.0 * (figure ? u_shapeLight.x * max(floor(turn * 3.0 + 0.5) / 3.0, 0.0) : u_propLift * clamp(turn, 0.0, 0.5));
+        L *= 1.0 + 2.0 * u_shapeLight.x * max(floor(turn * 3.0 + 0.5) / 3.0, 0.0);
         vec2 outward = slope / max(length(slope), 0.0001);
         float facing = step(0.5, dot(outward, toward)) * step(outward.y, 0.4);
-        rim = figure ? step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a : 0.0;
+        rim = step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a;
+    } else if (prop) {
+        vec4 surface = texture2D(u_shape, v_texCoords);
+        vec2 slope = (surface.rg * 2.0 - 1.0) * smoothstep(0.5, 1.0, surface.b);
+        vec4 arrive = texture2D(u_arrive, v_puv);
+        vec2 flow = vec2(arrive.r - arrive.g, arrive.b - arrive.a) / max(arrive.r + arrive.g + arrive.b + arrive.a, 0.004);
+        vec3 lamp = normalize(vec3(flow, 0.6));
+        vec3 normal = vec3(slope, sqrt(max(1.0 - dot(slope, slope), 0.0)));
+        L *= mix(1.0, clamp(max(dot(normal, lamp), 0.0) / lamp.z, 0.55, 1.5), u_propLift);
     }
     L = lampLight(L) * edgeLight(v_pos);
 

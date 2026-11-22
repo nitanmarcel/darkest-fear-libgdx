@@ -9,4 +9,5 @@ public final class LightTuning {
     public static float wallSoft = 1f;
     public static float ambient;
     public static float propLift = 0.5f;
+    public static float settle = 0.12f;
 }

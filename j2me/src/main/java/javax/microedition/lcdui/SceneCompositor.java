@@ -184,6 +184,7 @@ final class SceneCompositor {
         sh.setUniformf("u_debug", debug ? 1f : 0f);
         sh.setUniformf("u_cueColor", CUE_R, CUE_G, CUE_B);
         sh.setUniformi("u_shape", 3);
+        sh.setUniformi("u_arrive", 4);
         sh.setUniformf("u_shapeLight", SHAPE_LIFT, SHAPE_EDGE, SHAPE_EDGE_WIDTH / SpriteUpscaler.SHAPE_RANGE);
         sh.setUniformf("u_propLift", LightTuning.propLift);
         boundShape = null;
@@ -193,6 +194,7 @@ final class SceneCompositor {
         if (lit) {
             LightEngine.lightmap().bind(1);
             LightEngine.bounce().bind(2);
+            LightEngine.direction().bind(4);
             Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
         }
     }

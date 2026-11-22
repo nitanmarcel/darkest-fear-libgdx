@@ -111,6 +111,7 @@ public class Graphics {
 
         ShaderProgram.pedantic = false;
         LightEngine.lightShader = loadShader("post", "light");
+        LightEngine.directionShader = loadShader("post", "lightdir");
         LightEngine.kawaseDownShader = loadShader("post", "kawase_down");
         LightEngine.kawaseUpShader = loadShader("post", "kawase_up");
         sceneLightShader = loadShader("scenelight", "scenelight");

@@ -12,6 +12,7 @@ final class LightingPanel implements DebugPanel {
     private final float[] actor = new float[1];
     private final float[] wall = new float[1];
     private final float[] prop = new float[1];
+    private final float[] settle = new float[1];
     private final float[] ambient = new float[1];
 
     @Override
@@ -58,6 +59,10 @@ final class LightingPanel implements DebugPanel {
         prop[0] = LightTuning.propLift;
         if (ImGui.sliderFloat("Furniture shading", prop, 0f, 2f)) {
             LightTuning.propLift = prop[0];
+        }
+        settle[0] = LightTuning.settle;
+        if (ImGui.sliderFloat("Light settle time (s)", settle, 0f, 0.5f)) {
+            LightTuning.settle = settle[0];
         }
     }
 }
