@@ -15,12 +15,14 @@ final class PackMenu {
     private static final int TEXT_DROP = MenuTheme.TEXT_DROP;
     private static final int HELP_STEP = 15;
     private static final int ARROW_W = 20;
+    private static final int SCROLL_PAUSE = 1000, SCROLL_SPEED = 30;
     private static final String ADD = "Add a pack", REMOVE = "Remove";
 
     private static boolean open;
     private static int selected, focused = -1, scrollY;
     private static boolean removeArmed;
     private static int listTop, listBottom;
+    private static long selectedAt;
 
     private PackMenu() {
     }
@@ -35,6 +37,7 @@ final class PackMenu {
         focused = -1;
         scrollY = 0;
         removeArmed = false;
+        selectedAt = System.currentTimeMillis();
     }
 
     static void close() {
@@ -110,8 +113,18 @@ final class PackMenu {
             int room = right - bold.stringWidth(value) - 8 - TEXT_X - 2;
             g.setFont(bold);
             g.setColor(!usable ? MenuTheme.COLOR_DISABLED : on ? MenuTheme.COLOR_SELECTED : MenuTheme.COLOR_ITEM);
-            g.drawString(fit(bold, pack ? ResourcePack.name(i) : i == packs ? ADD : REMOVE, room), TEXT_X + 2, y + textPad,
-                    anchor | Graphics.LEFT);
+            String name = pack ? ResourcePack.name(i) : i == packs ? ADD : REMOVE;
+            int over = bold.stringWidth(name) - room;
+            if (on && over > 0) {
+                int rowTop = Math.max(y, listTop), rowBottom = Math.min(y + ROW_H, listBottom);
+                long time = (System.currentTimeMillis() - selectedAt) % (2 * SCROLL_PAUSE + over * 1000L / SCROLL_SPEED);
+                int shift = (int) Math.max(0, Math.min(over, (time - SCROLL_PAUSE) * SCROLL_SPEED / 1000));
+                g.setClip(TEXT_X + 2, rowTop, room, Math.max(0, rowBottom - rowTop));
+                g.drawString(name, TEXT_X + 2 - shift, y + textPad, anchor | Graphics.LEFT);
+                g.setClip(0, listTop, W, view);
+            } else {
+                g.drawString(fit(bold, name, room), TEXT_X + 2, y + textPad, anchor | Graphics.LEFT);
+            }
         }
         g.setClip(0, 0, W, H);
         MenuTheme.scrollBar(g, listTop, view, scrollY, content);
@@ -198,6 +211,9 @@ final class PackMenu {
 
     private static void select(int row) {
         removeArmed &= row == selected;
+        if (row != selected) {
+            selectedAt = System.currentTimeMillis();
+        }
         selected = row;
         if (row < ResourcePack.count()) {
             focused = row;
@@ -266,6 +282,9 @@ final class PackMenu {
         int row = rowAt(vx, vy);
         if (row != -1) {
             removeArmed &= row == selected;
+            if (row != selected) {
+                selectedAt = System.currentTimeMillis();
+            }
             selected = row;
         }
     }

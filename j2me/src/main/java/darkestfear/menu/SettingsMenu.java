@@ -121,7 +121,7 @@ final class SettingsMenu {
         Setting packs = new Setting("Graphics", "Resource packs", null, null, v -> PackMenu.open(),
                 "Replace the game's pictures with packs you add. Packs higher in the list win.");
         packs.shown = PackMenu::summary;
-        list.add(packs);
+        list.add(packs.needs(() -> !GameBridge.canContinue(), "Packs can only be changed before a game is started."));
         String needsWide = MenuOverlay.isDesktop() ? "Needs a wider window." : "Turn your phone sideways to use this.";
         list.add(new Setting("Display", "View", new String[] {"Original", "Expanded"},
                 () -> Graphics.isExpandedView() ? 1 : 0, v -> Graphics.setExpandedView(v == 1),
