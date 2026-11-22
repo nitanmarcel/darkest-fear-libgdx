@@ -318,6 +318,9 @@ public final class GameHud {
         if (a == null || !(sheet instanceof Image)) {
             return;
         }
+        if (!bright && id == HEART && Graphics.drawPack("heartEmpty", x + a[4], y + a[5])) {
+            return;
+        }
         g.drawRegion((Image) sheet, a[0], a[1], a[2], a[3], bright ? 0 : Graphics.DIMMED, x, y,
                 Graphics.TOP | Graphics.LEFT);
     }

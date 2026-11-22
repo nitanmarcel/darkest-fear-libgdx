@@ -33,6 +33,7 @@ final class SceneCompositor {
 
     private static final int CLS_CUE = 6;
     private static final int PATIENT_UNSAVED = 60, CHILD_UNSAVED = 79;
+    private static final int CREATURE = 2;
     private static final float CUE_R = 0.46f, CUE_G = 0.39f, CUE_B = 0.70f;
 
     private static final int EMBER = 0, HANDLE = 1;
@@ -54,6 +55,10 @@ final class SceneCompositor {
     private static final float WHITE = Color.WHITE.toFloatBits();
 
     private static final float STRUCT_FLOOR = 0.07f;
+    private static final float CAP_RANGE = 0.01f;
+    private static final int[] GLOW = {255, 252, 245, 255, 210, 0, 255, 164, 0, 227, 90, 1};
+    private static final int GLOW_RANGE = 3, GLOW_SHIFT = 5;
+    private static final float[] glowUniform = new float[GLOW.length];
     private static final float AMB_R = 0.040f, AMB_G = 0.035f, AMB_B = 0.065f;
 
     private static final int[] EAST_THEN_SOUTH = {0, 1, 1, 0};
@@ -73,12 +78,13 @@ final class SceneCompositor {
 
     private static float dangerAmount, dangerProgress, dangerPhase, dangerPulse;
     private static int playerX = Integer.MIN_VALUE, playerY;
+    private static int creatureCol = -1, creatureRow;
     private static Texture vignette;
     private static float cueTime;
     private static float dimBody;
     private static Texture boundShape, flatShape;
     private static int cuesPending;
-    private static final int[] cueRect = new int[MAX_PENDING * 4];
+    private static final float[] cueRect = new float[MAX_PENDING * 4];
     private static float cueBits;
 
     static FrameBuffer band(int i) {
@@ -163,9 +169,14 @@ final class SceneCompositor {
         sh.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
         sh.setUniformf("u_screen", Graphics.VIRTUAL_WIDTH, Graphics.VIRTUAL_HEIGHT);
         sh.setUniformf("u_lit", lit ? 1f : 0f);
-        sh.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+        sh.setUniformf("u_ambient", AMB_R + LightTuning.ambient, AMB_G + LightTuning.ambient, AMB_B + LightTuning.ambient);
         sh.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
         sh.setUniformf("u_capColor", cap[0], cap[1], cap[2]);
+        sh.setUniformf("u_capRange", cap[3]);
+        for (int i = 0; i < GLOW.length; i++) {
+            glowUniform[i] = GLOW[i] / 255f;
+        }
+        sh.setUniform3fv("u_glow", glowUniform, 0, glowUniform.length);
         sh.setUniformf("u_structFloor", STRUCT_FLOOR);
         sh.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);
         sh.setUniformf("u_actorPixel", LightTuning.actorPixel);
@@ -173,7 +184,9 @@ final class SceneCompositor {
         sh.setUniformf("u_debug", debug ? 1f : 0f);
         sh.setUniformf("u_cueColor", CUE_R, CUE_G, CUE_B);
         sh.setUniformi("u_shape", 3);
+        sh.setUniformi("u_arrive", 4);
         sh.setUniformf("u_shapeLight", SHAPE_LIFT, SHAPE_EDGE, SHAPE_EDGE_WIDTH / SpriteUpscaler.SHAPE_RANGE);
+        sh.setUniformf("u_propLift", LightTuning.propLift);
         boundShape = null;
         Graphics.setEdgeUniforms(sh);
         dimBody = Graphics.cuesEnabled ? PERSON_BODY : 0f;
@@ -181,8 +194,30 @@ final class SceneCompositor {
         if (lit) {
             LightEngine.lightmap().bind(1);
             LightEngine.bounce().bind(2);
+            LightEngine.direction().bind(4);
             Gdx.gl.glActiveTexture(GL20.GL_TEXTURE0);
         }
+    }
+
+    static boolean packFloor() {
+        LightBridge.LightState s = frame;
+        return s != null && ResourcePack.drawFloor(lit() ? null : s.grid, s.rows, s.cols,
+                Graphics.VIRTUAL_WIDTH / 2 - s.camX, Graphics.playAreaH / 2 - s.camY);
+    }
+
+    static int offGlow(int rgba) {
+        for (int k = 0; k < GLOW.length; k += 3) {
+            if (Math.abs((rgba >>> 24) - GLOW[k]) <= GLOW_RANGE && Math.abs((rgba >>> 16 & 255) - GLOW[k + 1]) <= GLOW_RANGE
+                    && Math.abs((rgba >>> 8 & 255) - GLOW[k + 2]) <= GLOW_RANGE) {
+                int blue = GLOW[k + 2] + (GLOW[k + 2] >= 128 ? -GLOW_SHIFT : GLOW_SHIFT);
+                return (rgba & 0xffff00ff) | blue << 8;
+            }
+        }
+        return rgba;
+    }
+
+    static void sheetsChanged() {
+        capColor = null;
     }
 
     private static float[] capColor() {
@@ -191,10 +226,14 @@ final class SceneCompositor {
             short[] a = LightBridge.spriteAttr(sid);
             Object img = LightBridge.spriteImage(sid);
             if (a == null || !(img instanceof Image)) {
-                return new float[] {-1f, -1f, -1f};
+                return new float[] {-1f, -1f, -1f, CAP_RANGE};
             }
             int p = ((Image) img).pixmap().getPixel(a[0], a[1]);
-            capColor = new float[] {(p >>> 24 & 255) / 255f, (p >>> 16 & 255) / 255f, (p >>> 8 & 255) / 255f};
+            capColor = ResourcePack.tone(sid);
+            if (capColor == null) {
+                capColor = new float[] {(p >>> 24 & 255) / 255f, (p >>> 16 & 255) / 255f, (p >>> 8 & 255) / 255f, 0f};
+            }
+            capColor[3] = Math.max(capColor[3], CAP_RANGE);
         }
         return capColor;
     }
@@ -379,6 +418,10 @@ final class SceneCompositor {
             setBand(DECAL);
             return;
         }
+        if (isHitMark(id)) {
+            setBand(FX);
+            return;
+        }
         boolean perSprite = Graphics.objectLightShader != null;
         int px = drawX + a[0] + a[4];
         int py = drawY + a[1] + a[5];
@@ -405,7 +448,7 @@ final class SceneCompositor {
             int cls = CLS_ACTOR;
             int cx = drawX + srcX + w / 2, cy = drawY + srcY + h / 2;
             boolean player = Math.abs(cx - playerX) <= 8 && cy >= playerY - 18 && cy <= playerY + 6;
-            if (player || (inGrid && personAt(s, row, col))) {
+            if (player || (inGrid && (personAt(s, row, col) || (col == creatureCol && row == creatureRow)))) {
                 cls = CLS_PLAYER;
                 float warned = (1f - dangerProgress) * (1f - DANGER_PULSE * (1f - dangerPulse));
                 float body = !Graphics.cuesEnabled ? 0f
@@ -424,23 +467,23 @@ final class SceneCompositor {
         if (!Graphics.cuesEnabled || !lit() || s.playerRow < 0) {
             return;
         }
+        float[] packed = ResourcePack.cues(sid);
         float alpha = -1f;
-        for (int i = 0; i < CUES.length && cuesPending < MAX_PENDING; i += 6) {
-            if (CUES[i] != sid) {
+        for (int i = 0; i < (packed != null ? packed.length : CUES.length) && cuesPending < MAX_PENDING; i += packed != null ? 5 : 6) {
+            if (packed == null && CUES[i] != sid) {
                 continue;
             }
             if (alpha < 0f) {
-                alpha = cueAlpha(s, row, col, CUES[i + 5]);
+                alpha = cueAlpha(s, row, col, packed != null ? (int) packed[i] : CUES[i + 5]);
                 if (alpha <= 0f) {
                     return;
                 }
                 cueBits = Color.toFloatBits(0, 0, CLS_CUE * 32, (int) (alpha * 254f));
             }
             int k = cuesPending++ * 4;
-            cueRect[k] = x + CUES[i + 1];
-            cueRect[k + 1] = y + CUES[i + 2];
-            cueRect[k + 2] = CUES[i + 3];
-            cueRect[k + 3] = CUES[i + 4];
+            for (int j = 0; j < 4; j++) {
+                cueRect[k + j] = (j == 0 ? x : j == 1 ? y : 0) + (packed != null ? packed[i + 1 + j] : CUES[i + 1 + j]);
+            }
         }
     }
 
@@ -559,6 +602,9 @@ final class SceneCompositor {
             playerX = p[0] + Graphics.VIRTUAL_WIDTH / 2 - s.camX;
             playerY = p[1] + Graphics.playAreaH / 2 - s.camY;
         }
+        int[] creature = LightBridge.actor(CREATURE);
+        creatureCol = creature == null ? -1 : creature[3];
+        creatureRow = creature == null ? 0 : creature[4];
     }
 
     private static void drawVignette() {
@@ -584,6 +630,10 @@ final class SceneCompositor {
         Graphics.batch.draw(vignette, 0, 0, Graphics.VIRTUAL_WIDTH, Graphics.playAreaH);
         Graphics.batch.setColor(Color.WHITE);
         Graphics.batch.end();
+    }
+
+    private static boolean isHitMark(int id) {
+        return id == 84 || id == 85 || id == 88;
     }
 
     private static boolean isDecal(int id) {
@@ -739,7 +789,8 @@ final class SceneCompositor {
                 floorShader.setUniformf("u_scroll", LightEngine.scrollX(), LightEngine.scrollY());
                 floorShader.setUniformf("u_lightShift", LightEngine.shiftX(), LightEngine.shiftY());
                 floorShader.setUniformf("u_mapTiles", LightEngine.mapCols(), LightEngine.mapRows());
-                floorShader.setUniformf("u_ambient", AMB_R, AMB_G, AMB_B);
+                floorShader.setUniformf("u_ambient", AMB_R + LightTuning.ambient, AMB_G + LightTuning.ambient,
+                        AMB_B + LightTuning.ambient);
                 Graphics.setEdgeUniforms(floorShader);
                 floorShader.setUniformf("u_bounceGain", bounce[0], bounce[1], bounce[2]);
                 floorShader.setUniform1fv("u_curveF", LightEngine.levelCurve(), 0, 8);

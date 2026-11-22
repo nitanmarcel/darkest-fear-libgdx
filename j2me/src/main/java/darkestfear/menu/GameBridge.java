@@ -167,6 +167,24 @@ public final class GameBridge {
         return currentScreenIs(levelCls);
     }
 
+    static int[] cutscene() {
+        try {
+            Object screen = available() ? mGetCurrentScreen.invoke(null) : null;
+            if (!cutsceneCls.isInstance(screen)) {
+                return null;
+            }
+            Field scene = findField(cutsceneCls, "t", int.class), tick = findField(cutsceneCls, "u", int.class);
+            Field line = findField(cutsceneCls, "w", int.class), shown = findField(cutsceneCls, "d", boolean.class);
+            scene.setAccessible(true);
+            tick.setAccessible(true);
+            line.setAccessible(true);
+            shown.setAccessible(true);
+            return new int[] {scene.getInt(screen), tick.getInt(screen), shown.getBoolean(screen) ? line.getInt(screen) : -1};
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public static boolean inCutscene() {
         return currentScreenIs(cutsceneCls);
     }

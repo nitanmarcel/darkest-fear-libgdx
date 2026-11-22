@@ -1,0 +1,184 @@
+[sprites]
+0 BED_BOTTOM
+1@wood DOOR_WOOD_N handle:36,26,4,2
+1@stone DOOR_STONE_N handle:26,26,4,2
+1@tile DOOR_TILE_N handle:25,23,3,2
+2 THOMAS_W_3
+3 THOMAS_N_3
+4 THOMAS_N_0
+5 THOMAS_S_3
+6 THOMAS_S_6
+7 THOMAS_E_3
+8 THOMAS_E_0
+9 WALL_*_CORNER
+10 WALL_*_SIDE
+11 THOMAS_W_0
+12 LANTERN
+13 CLOSET_CLOSED handle:15,32,2,2 handle:20,32,2,2
+14 GHOUL_S_0
+15 GHOUL_S_1
+16 GHOUL_N_0
+17 GHOUL_N_2
+18 GHOUL_W_0
+19 GHOUL_W_1
+20 GHOUL_E_0
+21 GHOUL_E_1
+22 FLASH_S
+23 FLASH_N
+24 FLASH_E
+25 FLASH_W
+26 MIRROR_N
+27 MIRROR_E
+28 MIRROR_W
+29 MIRROR_S
+30 BLOOD_STAIN
+31 DEATH_0
+32 DEATH_2
+33 DEATH_4
+35 WALL_*_FRONT
+36 WALL_*_FRONT_CLIPPED
+37 WALL_*_SIDE_CLIPPED
+38 WALL_*_INCORNER
+39 CLOSET_OPEN
+40 CAGE_OPEN
+41 CAGE_CLOSED
+42@wood DOOR_WOOD_W handle:15,26,2,3
+42@stone DOOR_STONE_W handle:14,24,2,3
+42@tile DOOR_TILE_W handle:14,28,2,3
+43 BED_TOP
+44 THOMAS_W_6
+45 TRIGGER
+46 PHONE
+47 BOOK
+48@wood WINDOW_WOOD_N_CLOSED ember:21,17,2,7
+48@stone WINDOW_STONE_N_CLOSED ember:22,18,2,8
+48@tile WINDOW_TILE_N_CLOSED ember:21,18,2,8
+49 WINDOW_*_N_OPEN
+50 FIRE_PLACE_E_0 ember:18,30,4,3
+51 FIRE_PLACE_E_1
+52 FIRE_PLACE_E_2
+53 WINDOW_*_W_OPEN
+54@wood WINDOW_WOOD_W_CLOSED ember:15,10,2,10
+54@stone WINDOW_STONE_W_CLOSED ember:13,8,2,10
+54@tile WINDOW_TILE_W_CLOSED ember:13,10,2,10
+55 CHAIR_W
+56 CHAIR_E
+57 FIRE_PLACE_W_0 ember:8,30,4,3
+58 FIRE_PLACE_W_1
+59 FIRE_PLACE_W_2
+60 NPC_CRY
+61 NPC_OK
+62 THOMAS_N_6
+63 THOMAS_S_0
+64 THOMAS_E_6
+65 NINA
+66 PATIENT_STANDING
+67 SUSAN
+68 DOCTOR
+69 GIRL
+70 GRANNY
+71 CLOSET_MOVED
+72 TABLE_2
+73 TABLE_1
+74 TABLE_0
+76 HUD_HEALTH_ICON
+77 LEVEL_GRAPHICS:HUD_KEY
+78 WC
+79 GIRL_CRY
+80 BOY
+81 FLUID_BAG
+82 CORPSE_BOTTOM
+83 CORPSE_TOP
+84 SCRATCH_3 anchor:24,21
+85 SCRATCH_2 anchor:15,29
+86 BLOOD_DRAGGED
+88 SCRATCH_1 anchor:-2,45
+89 STAIR_CASE
+90 WALL_BLACK
+91 FLASH_OFF ember:3,3,2,3
+92 LANTERN_OFF ember:7,15,3,3
+93 HUD_PATIENT_ENABLED
+98 SHADOW
+129 POO_MONSTER
+130 POO_0
+131 POO_1
+132 POO_2
+133 SPINEMONSTER_0
+134 SPINEMONSTER_1
+135 SPINEMONSTER_2
+136 PEE_0
+137 PEE_1
+138 PEE_2
+139 BIG_MONSTER_0
+140 BIG_MONSTER_1
+141 EGG_0
+142 EGG_1
+143 SPIT_0
+144 SPIT_1
+145 SPIT_2
+
+[floors]
+wood TILE_WOOD_1 TILE_WOOD_2 TILE_WOOD_3
+stone TILE_STONE_1 TILE_STONE_2
+tile TILE_TILE_1 TILE_TILE_2 TILE_TILE_3
+
+[shades]
+wood DIM_BLOCK_WOOD_1 DIM_BLOCK_WOOD_2 DIM_BLOCK_WOOD_3 DIM_BLOCK_WOOD_4 DIM_BLOCK_WOOD_5 DIM_BLOCK_WOOD_6 DIM_BLOCK_WOOD_7
+stone DIM_BLOCK_TILE_1 DIM_BLOCK_TILE_2 DIM_BLOCK_TILE_3 DIM_BLOCK_TILE_4 DIM_BLOCK_TILE_5 DIM_BLOCK_TILE_6 DIM_BLOCK_TILE_7
+tile DIM_BLOCK_TILE_1 DIM_BLOCK_TILE_2 DIM_BLOCK_TILE_3 DIM_BLOCK_TILE_4 DIM_BLOCK_TILE_5 DIM_BLOCK_TILE_6 DIM_BLOCK_TILE_7
+
+[hud]
+
+[sounds]
+24 ingame_01.mp3
+25 ingame_02.mp3
+26 ingame_03.mp3
+27 boss.mp3
+28 menu.mp3
+29 death.mp3
+30 level_passed.mp3
+
+[events]
+door_open 5.75 door_open.wav
+door_close 5.02 door_close.wav
+closet_open 8.18 closet_open.wav
+cage_open 4.16 cage_open.wav
+window_open 6.21 window_open.wav
+box_push 5.03 push_box_a1.wav push_box_a2.wav
+trigger 2.36 floor_trigger.wav
+lamp_light 8.06 light_up_lamp.wav
+item_take 5.18 pc_pick_up_item.wav
+item_drop 6.04 pc_remove_item.wav
+fireplace_light 7.53 light_fireplace.wav
+fireplace_burning 2.54 fireplace_burning_loop.wav
+patient_lit 3.69 pc_light_patient.wav
+patient_unlit 5.43 pc_remove_light_from_patient.wav
+hit 2.17 pc_thomas_gets_hit_by_a_monster_a1.wav pc_thomas_gets_hit_by_a_monster_a2.wav pc_thomas_gets_hit_by_a_monster_a3.wav
+hit_voice 2.32 pc_thomas_gets_hit_by_a_monster_vocal_a1.wav pc_thomas_gets_hit_by_a_monster_vocal_a2.wav pc_thomas_gets_hit_by_a_monster_vocal_a3.wav
+monster 4.02 monster_spotted_a1.wav monster_spotted_a2.wav monster_spotted_a3.wav monster_idle_a1.wav monster_idle_a2.wav monster_idle_a3.wav
+monster_die 3.91 monster_explodes_a1.wav monster_explodes_a2.wav monster_explodes_a3.wav
+creature_idle 3.14 boss1_idle_a1.wav boss1_idle_a2.wav
+creature_hit 2.66 boss1_hit_a1.wav boss1_hit_a2.wav boss1_hit_a3.wav boss1_hit_a4.wav boss1_hit_a5.wav
+creature_die 4.05 boss1_die.mp3
+slime_throw 2.02 boss1_throw_slime_a1.wav boss1_throw_slime_a2.wav boss1_throw_slime_a3.wav
+slime_hit 2.26 slime_hit_a1.wav slime_hit_a2.wav
+spine_move 3.23 spine_girl_moving_a1.wav spine_girl_moving_a2.wav spine_girl_moving_a3.wav spine_girl_moving_a4.wav
+spine_idle 1.25 helen_voice_a1.mp3 helen_voice_a2.mp3 helen_voice_a3.mp3
+spine_die 2.79 helen_voice_a1.mp3 helen_voice_a2.mp3 helen_voice_a3.mp3
+helen_move 5.94 helen_move_a1.wav helen_move_a2.wav helen_move_a3.wav helen_move_a4.wav helen_move_a5.wav
+helen_idle 1.25 helen_voice_a1.mp3 helen_voice_a2.mp3 helen_voice_a3.mp3
+helen_hit 3.05 helen_hit_a1.wav helen_hit_a2.wav
+helen_hit_voice 2.83 helen_hit_vocal_a1.wav helen_hit_vocal_a2.wav helen_hit_vocal_a3.wav
+phone_ring 4.44 phone_ringing.wav
+phone_answer 6.91 pc_answer_the_phone.wav
+level_start.5 7.35 scream_female_a1.mp3 scream_female_a2.mp3
+cutscene.1.15 10.29 closet_open.wav
+cutscene.3.line4 10.15 light_up_lamp.wav
+cutscene.5.405 3.92 cutscene_patient_monster.mp3
+cutscene.9.17 4.44 cutscene_thomas_bitten.mp3
+cutscene.12.18 6.74 scream_female_a1.mp3
+cutscene.15.580 3.92 helen_hit_vocal_a2.wav
+cutscene.16.0 3.92 cutscene_patient_monster.mp3
+cutscene.17.40 8.01 scream_female_a2.mp3
+cutscene.18.20 5.50 cutscene_thomas_monster.mp3
+cutscene.18.161 8.01 scream_female_a2.mp3

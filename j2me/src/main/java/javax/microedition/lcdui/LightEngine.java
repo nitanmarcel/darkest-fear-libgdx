@@ -20,11 +20,11 @@ final class LightEngine {
     private static int LW = W, LH = H;
 
     static void resize() {
-        FrameBuffer[] fbs = {rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp};
+        FrameBuffer[] fbs = {rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp, dirFbo, settled, earlier};
         for (FrameBuffer fb : fbs) {
             if (fb != null) fb.dispose();
         }
-        rawFbo = lightFbo = bounceFbo = mid = half = quarter = halfUp = null;
+        rawFbo = lightFbo = bounceFbo = mid = half = quarter = halfUp = dirFbo = settled = earlier = null;
         W = LW = Graphics.VIRTUAL_WIDTH;
         H = LH = Graphics.VIRTUAL_HEIGHT;
     }
@@ -46,9 +46,14 @@ final class LightEngine {
             {1.00f, 0.74f, 0.42f}, {1.00f, 0.82f, 0.52f}, null, {1.00f, 0.96f, 0.90f}, {0.62f, 0.76f, 1.00f}, {1.00f, 0.64f, 0.32f}};
     private static final int WOOD_RAMP_TOP = 99;
 
-    static ShaderProgram lightShader, kawaseDownShader, kawaseUpShader;
+    static ShaderProgram lightShader, kawaseDownShader, kawaseUpShader, directionShader;
 
-    private static FrameBuffer rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp, sdfView, gridView;
+    private static FrameBuffer rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp, sdfView, gridView, dirFbo, settled, earlier;
+    private static byte[][] settledGrid;
+    private static int settledCamX, settledCamY;
+    private static final int LAMP = 7, DIR_SCALE = 2;
+    private static float[] lamps = new float[LAMP * 16];
+    private static int lampCount;
     private static Texture sdfTex, furnTex;
     private static Pixmap sdfPix, furnPix;
     private static final Matrix4 proj = new Matrix4();
@@ -69,7 +74,7 @@ final class LightEngine {
     private static final float[] tmpColor = new float[3];
 
     static void dispose() {
-        FrameBuffer[] fbs = {rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp, sdfView, gridView};
+        FrameBuffer[] fbs = {rawFbo, lightFbo, bounceFbo, mid, half, quarter, halfUp, sdfView, gridView, dirFbo, settled, earlier};
         for (FrameBuffer fb : fbs) {
             if (fb != null) fb.dispose();
         }
@@ -98,6 +103,10 @@ final class LightEngine {
 
     static Texture bounce() {
         return bounceFbo.getColorBufferTexture();
+    }
+
+    static Texture direction() {
+        return dirFbo.getColorBufferTexture();
     }
 
     static Texture furniture() {
@@ -155,6 +164,10 @@ final class LightEngine {
             half = make(W / 4, H / 4, Texture.TextureFilter.Linear);
             quarter = make(W / 8, H / 8, Texture.TextureFilter.Linear);
             halfUp = make(W / 4, H / 4, Texture.TextureFilter.Linear);
+            dirFbo = make(W / DIR_SCALE, H / DIR_SCALE, Texture.TextureFilter.Linear);
+            settled = make(LW, LH, Texture.TextureFilter.Linear);
+            earlier = make(LW, LH, Texture.TextureFilter.Linear);
+            settledGrid = null;
         }
         if (s.playH > 0) {
             Graphics.playAreaH = s.playH;
@@ -170,7 +183,8 @@ final class LightEngine {
         updateDistanceField(s);
         readFloorRamp();
         drawLights(s);
-        blur(rawFbo, lightFbo, kawaseUpShader);
+        drawDirections();
+        blur(settle(s), lightFbo, kawaseUpShader);
         blur(lightFbo, mid, kawaseDownShader);
         blur(mid, half, kawaseDownShader);
         blur(half, quarter, kawaseDownShader);
@@ -416,6 +430,7 @@ final class LightEngine {
 
     private static void drawLights(LightBridge.LightState s) {
         byte[][] e = s.entities;
+        lampCount = 0;
         rawFbo.begin();
         Gdx.gl.glViewport(0, 0, LW, LH);
         Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
@@ -510,6 +525,11 @@ final class LightEngine {
             lightShader.setUniformf("u_dir", dx, dy);
             lightShader.setUniformf("u_cone", type == MIRROR ? SLOPE_NARROW : SLOPE_WIDE);
             lightShader.setUniformf("u_intensity", 0.5f * flick * fade[i]);
+            if ((lampCount + 1) * LAMP > lamps.length) {
+                lamps = java.util.Arrays.copyOf(lamps, lamps.length * 2);
+            }
+            float[] lamp = {lx, ly, rad, dx, dy, type == MIRROR ? SLOPE_NARROW : SLOPE_WIDE, 0.5f * flick * fade[i]};
+            System.arraycopy(lamp, 0, lamps, lampCount++ * LAMP, LAMP);
             Graphics.batch.draw(sdfTex, lx - rad, ly - rad, rad * 2f, rad * 2f);
             Graphics.batch.flush();
         }
@@ -520,6 +540,77 @@ final class LightEngine {
         Graphics.batch.setShader(null);
         Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         rawFbo.end();
+    }
+
+    private static FrameBuffer settle(LightBridge.LightState s) {
+        float time = LightTuning.settle;
+        int dx = s.camX - settledCamX, dy = s.camY - settledCamY;
+        boolean carry = time > 0f && settledGrid == s.grid && Math.abs(dx) < 2 * TILE && Math.abs(dy) < 2 * TILE;
+        settledGrid = time > 0f ? s.grid : null;
+        settledCamX = s.camX;
+        settledCamY = s.camY;
+        if (time <= 0f) {
+            return rawFbo;
+        }
+        FrameBuffer swap = earlier;
+        earlier = settled;
+        settled = swap;
+        settled.begin();
+        Gdx.gl.glViewport(0, 0, LW, LH);
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        Gdx.gl.glClearColor(0f, 0f, 0f, 1f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        proj.setToOrtho2D(0, 0, W, H);
+        Graphics.batch.setProjectionMatrix(proj);
+        Graphics.batch.setShader(null);
+        Graphics.batch.setColor(Color.WHITE);
+        Graphics.batch.setBlendFunction(GL20.GL_ONE, GL20.GL_ZERO);
+        Graphics.batch.begin();
+        if (carry) {
+            Graphics.batch.draw(earlier.getColorBufferTexture(), -dx, -dy, W, H, 0f, 0f, 1f, 1f);
+            Graphics.batch.flush();
+            float share = 1f - (float) Math.exp(-Math.min(0.05f, Gdx.graphics.getDeltaTime()) / time);
+            Gdx.gl.glBlendColor(0f, 0f, 0f, share);
+            Graphics.batch.setBlendFunction(GL20.GL_CONSTANT_ALPHA, GL20.GL_ONE_MINUS_CONSTANT_ALPHA);
+        }
+        Graphics.batch.draw(rawFbo.getColorBufferTexture(), 0f, 0f, W, H, 0f, 0f, 1f, 1f);
+        Graphics.batch.end();
+        Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        settled.end();
+        return settled;
+    }
+
+    private static void drawDirections() {
+        dirFbo.begin();
+        Gdx.gl.glViewport(0, 0, dirFbo.getWidth(), dirFbo.getHeight());
+        Gdx.gl.glDisable(GL20.GL_SCISSOR_TEST);
+        Gdx.gl.glClearColor(0f, 0f, 0f, 0f);
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT);
+        if (directionShader != null && lampCount > 0) {
+            proj.setToOrtho2D(0, 0, W, H);
+            Graphics.batch.setProjectionMatrix(proj);
+            Graphics.batch.setShader(directionShader);
+            Graphics.batch.setBlendFunction(GL20.GL_ONE, GL20.GL_ONE);
+            Graphics.batch.setColor(Color.WHITE);
+            Graphics.batch.begin();
+            directionShader.setUniformf("u_tile", TILE);
+            directionShader.setUniformf("u_scale", DIR_SCALE);
+            for (int i = 0; i < lampCount; i++) {
+                int at = i * LAMP;
+                float rad = lamps[at + 2];
+                directionShader.setUniformf("u_lightPx", lamps[at], lamps[at + 1]);
+                directionShader.setUniformf("u_radiusPx", rad);
+                directionShader.setUniformf("u_dir", lamps[at + 3], lamps[at + 4]);
+                directionShader.setUniformf("u_cone", lamps[at + 5]);
+                directionShader.setUniformf("u_intensity", lamps[at + 6]);
+                Graphics.batch.draw(sdfTex, lamps[at] - rad, lamps[at + 1] - rad, rad * 2f, rad * 2f);
+                Graphics.batch.flush();
+            }
+            Graphics.batch.end();
+            Graphics.batch.setShader(null);
+            Graphics.batch.setBlendFunction(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        }
+        dirFbo.end();
     }
 
     private static void blur(FrameBuffer src, FrameBuffer dst, ShaderProgram shader) {

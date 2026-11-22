@@ -37,6 +37,8 @@ public final class LightBridge {
     private static Field fPlates;
     private static Field fTriggers;
     private static Field fCarried;
+    private static Field fHurt;
+    private static final java.util.Map<String, Field> peeked = new java.util.HashMap<>();
     private static Field fFearTime;
     private static Field fFearLimit;
     private static Field fInterCount;
@@ -255,6 +257,7 @@ public final class LightBridge {
             fPlates = fieldOrNull("b", byte[][].class);
             fTriggers = fieldOrNull("d", byte[][].class);
             fCarried = fieldOrNull("k", byte.class);
+            fHurt = fieldOrNull("h", int.class);
             fHealth = fieldOrNull("A", byte.class);
             fHealthMax = fieldOrNull("z", byte.class);
             fKeys = fieldOrNull("E", byte.class);
@@ -748,6 +751,44 @@ public final class LightBridge {
         }
     }
 
+    public static short[][] spriteTable() {
+        try {
+            return fSpriteAttr == null ? null : (short[][]) fSpriteAttr.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    public static int soundId(byte[] data) {
+        try {
+            int[] ids = null;
+            byte[][] sounds = null;
+            for (Field f : Class.forName("k", false, GameJar.loader()).getDeclaredFields()) {
+                f.setAccessible(true);
+                if (f.getType() == int[].class) {
+                    ids = (int[]) f.get(null);
+                } else if (f.getType() == byte[][].class) {
+                    sounds = (byte[][]) f.get(null);
+                }
+            }
+            for (int i = 0; ids != null && sounds != null && i < ids.length && i < sounds.length; i++) {
+                if (java.util.Arrays.equals(sounds[i], data)) {
+                    return ids[i];
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    public static Object[] spriteSheets() {
+        try {
+            return fSpriteImages == null ? null : (Object[]) fSpriteImages.get(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     public static short[] spriteAttr(int spriteId) {
         if (fSpriteAttr == null) {
             return null;
@@ -884,6 +925,61 @@ public final class LightBridge {
 
     public static byte[][] triggerTable() {
         return objectTable(fTriggers);
+    }
+
+    public static int hurtTimer() {
+        Object level = fHurt == null ? null : currentLevel();
+        try {
+            return level == null ? 0 : fHurt.getInt(level);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    public static int peek(String name, Class<?> type) {
+        Object level = currentLevel();
+        try {
+            Field f = peeked.get(name + type);
+            if (f == null || f.getDeclaringClass() != levelCls) {
+                f = field(name, type);
+                peeked.put(name + type, f);
+            }
+            return type == boolean.class ? (f.getBoolean(level) ? 1 : 0) : type == byte.class ? f.getByte(level) : f.getInt(level);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    public static int[][] debris() {
+        Object level = currentLevel();
+        try {
+            return level == null ? null : (int[][]) field("f", int[][].class).get(level);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    public static int stalker(String name) {
+        Object level = fEnemy == null ? null : currentLevel();
+        try {
+            Object actor = level == null ? null : fEnemy.get(level);
+            return actor == null ? 0 : declaredField(actor.getClass(), name, int.class).getInt(actor);
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    public static int soundLevel() {
+        try {
+            for (Field f : Class.forName("k", false, GameJar.loader()).getDeclaredFields()) {
+                if (f.getType() == int.class) {
+                    f.setAccessible(true);
+                    return f.getInt(null);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0;
     }
 
     public static int carriedLight() {

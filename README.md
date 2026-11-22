@@ -26,6 +26,57 @@ Builds for Linux, Windows, macOS and Android are on the
 
 Keys can be changed in Settings.
 
+## Resource packs
+
+### iPhone graphics and sounds
+
+You can convert the IPhone version of the game to a resource pack (sprites and audio only)
+
+```
+./gradlew converter:jar
+java -jar converter/build/libs/df-convert.jar <source>.ipa pack.zip
+```
+
+Then add `pack.zip` in the Resource packs screen.
+
+### Format
+
+A zip with a `pack.json`:
+
+```
+{
+  "format": 1,                // format version
+  "id": "my-pack",            // pack id
+  "name": "My pack",          // name shown in the menu
+  "scale": 2,                 // pack pixels per game pixel
+
+  "sprites": {
+    "0": {                    // sprite id
+      "file": "art.png",              // image
+      "rect": [462, 384, 35, 33],     // x, y, width, height in the image
+      "anchor": [17, 26],             // origin inside the rect
+      "normal": "art_n.png"           // normal map
+    }
+  },
+  "floors": {
+    "wood": [                 // level theme: wood, stone or tile
+      { "file": "art.png", "rect": [351, 507, 34, 34] }   // floor tile
+    ]
+  },
+  "sounds": {
+    "24": {                   // sound id
+      "file": "music.mp3"             // mp3, ogg or wav
+    }
+  },
+  "events": {
+    "door_open": {            // extra sound
+      "volume": 1.0,                  // loudness
+      "files": ["door.wav"]           // one is picked at random
+    }
+  }
+}
+```
+
 ## Build
 
 ### Requirements
@@ -86,6 +137,7 @@ The APK is written to `android/build/outputs/apk/release/`.
 - [x] Sound
 - [x] Gameplay
 - [x] Android
+- [x] Resource packs
 
 ## How does it work
 

@@ -1,0 +1,14 @@
+plugins {
+    id 'application'
+}
+
+application {
+    mainClass = 'darkestfear.converter.IpaConverter'
+}
+
+jar {
+    archiveFileName = 'df-convert.jar'
+    manifest {
+        attributes 'Main-Class': application.mainClass
+    }
+}

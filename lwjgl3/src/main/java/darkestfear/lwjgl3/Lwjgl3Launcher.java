@@ -6,6 +6,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3WindowAdapter;
 import darkestfear.DarkestFearGame;
 import darkestfear.GameFiles;
 import darkestfear.debug.Debug;
+import darkestfear.lwjgl3.audio.PackPlayer;
 import darkestfear.lwjgl3.audio.PlayerCompat;
 import darkestfear.lwjgl3.debug.ImGuiDebugUi;
 
@@ -21,7 +22,8 @@ import javax.microedition.media.Manager;
 
 public class Lwjgl3Launcher implements GameFiles {
     public static void main(String[] args) {
-        Manager.setPlayerFactory(PlayerCompat::new);
+        Manager.setPlayerFactory((stream, packExtension) -> packExtension == null ? new PlayerCompat(stream)
+                : new PackPlayer(stream.readAllBytes(), packExtension));
 
         if (Boolean.getBoolean("darkestfear.debug")) {
             Debug.install(new ImGuiDebugUi());
@@ -57,13 +59,13 @@ public class Lwjgl3Launcher implements GameFiles {
     }
 
     @Override
-    public void choose(Chosen chosen) {
+    public void choose(String extension, Chosen chosen) {
         new Thread(() -> {
             String path;
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 PointerBuffer filter = stack.mallocPointer(1);
-                filter.put(stack.UTF8("*.jar")).flip();
-                path = TinyFileDialogs.tinyfd_openFileDialog("Choose the Darkest Fear jar", "", filter, "Phone game (*.jar)", false);
+                filter.put(stack.UTF8("*." + extension)).flip();
+                path = TinyFileDialogs.tinyfd_openFileDialog("Choose a file", "", filter, "*." + extension, false);
             }
             if (path != null) {
                 chosen.file(new File(path));

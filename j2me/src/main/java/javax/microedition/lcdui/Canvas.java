@@ -52,6 +52,8 @@ public abstract class Canvas extends Displayable {
 
     public static void renderFrame(Graphics g) {
         MenuOverlay.applyPending();
+        ResourcePack.sync();
+        darkestfear.menu.SoundEvents.tick();
         MenuOverlay.keepSplash();
         GameBridge.keepOverlay();
         Displayable d = Display.current();
@@ -80,6 +82,8 @@ public abstract class Canvas extends Displayable {
                 Graphics.textMuted = GameBridge.inCutscene();
                 try {
                     ((Canvas) d).paint(g);
+                    darkestfear.menu.TestRoom.paint(g);
+                    darkestfear.menu.Cheats.tick();
                 } finally {
                     Graphics.textMuted = false;
                 }

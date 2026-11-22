@@ -111,6 +111,7 @@ public class Graphics {
 
         ShaderProgram.pedantic = false;
         LightEngine.lightShader = loadShader("post", "light");
+        LightEngine.directionShader = loadShader("post", "lightdir");
         LightEngine.kawaseDownShader = loadShader("post", "kawase_down");
         LightEngine.kawaseUpShader = loadShader("post", "kawase_up");
         sceneLightShader = loadShader("scenelight", "scenelight");
@@ -474,7 +475,7 @@ public class Graphics {
     }
 
     static Texture upscaledSheet(Image img) {
-        return upscaleEnabled ? img.upscaledTexture() : null;
+        return upscaleEnabled || img.packed() ? img.upscaledTexture() : null;
     }
 
     public static void present() {
@@ -617,7 +618,9 @@ public class Graphics {
                 setClip(clipX, clipY, clipW, clipH);
             }
             SceneCompositor.setBand(SceneCompositor.FLOOR);
-            batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            if (!SceneCompositor.packFloor()) {
+                batch.draw(img.texture(), x, y, iw, ih, 0, 0, iw, ih, false, true);
+            }
         } else {
             if (flatFrame || clipY >= playAreaH) {
                 SceneCompositor.setBand(SceneCompositor.FX);
@@ -648,15 +651,22 @@ public class Graphics {
         SceneCompositor.setBand(SceneCompositor.FX);
         float shade = transform == DIMMED ? 0.28f : 1f;
         batch.setColor(shade, shade, shade, 1f);
+        boolean pack = src.packed() && ResourcePack.replaces(src, xSrc, ySrc, width, height);
+        int detail = pack ? SpriteUpscaler.SCALE : 1;
+        Texture tex = pack ? src.upscaledTexture() : src.texture();
         if (wideActive) {
-            Texture tex = src.texture();
             float iw = 1f / tex.getWidth(), ih = 1f / tex.getHeight();
-            batch.draw(tex, x, y, width, height, (xSrc + REGION_INSET) * iw, (ySrc + REGION_INSET) * ih,
-                    (xSrc + width - REGION_INSET) * iw, (ySrc + height - REGION_INSET) * ih);
+            batch.draw(tex, x, y, width, height, (xSrc * detail + REGION_INSET) * iw, (ySrc * detail + REGION_INSET) * ih,
+                    ((xSrc + width) * detail - REGION_INSET) * iw, ((ySrc + height) * detail - REGION_INSET) * ih);
         } else {
-            batch.draw(src.texture(), x, y, width, height, xSrc, ySrc, width, height, false, true);
+            batch.draw(tex, x, y, width, height, xSrc * detail, ySrc * detail, width * detail, height * detail, false, true);
         }
         batch.setColor(color);
+    }
+
+    public static boolean drawPack(String name, int anchorX, int anchorY) {
+        SceneCompositor.setBand(SceneCompositor.FX);
+        return ResourcePack.drawHud(name, anchorX, anchorY, wideActive);
     }
 
     public void drawString(String str, int x, int y, int anchor) {

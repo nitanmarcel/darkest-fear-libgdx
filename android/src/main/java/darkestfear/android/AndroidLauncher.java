@@ -32,7 +32,7 @@ public class AndroidLauncher extends AndroidApplication implements GameFiles {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Manager.setPlayerFactory(AndroidPlayer::new);
+        Manager.setPlayerFactory((stream, packExtension) -> new AndroidPlayer(stream));
         if (!new File(getFilesDir(), DarkestFearGame.JAR).exists()) {
             new File(getCodeCacheDir(), DEXED).delete();
         }
@@ -46,7 +46,7 @@ public class AndroidLauncher extends AndroidApplication implements GameFiles {
     }
 
     @Override
-    public void choose(Chosen chosen) {
+    public void choose(String extension, Chosen chosen) {
         this.chosen = chosen;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);

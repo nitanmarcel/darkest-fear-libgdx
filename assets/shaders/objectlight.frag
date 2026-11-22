@@ -21,6 +21,8 @@ uniform float u_lit;
 uniform vec3 u_ambient;
 uniform vec3 u_bounceGain;
 uniform vec3 u_capColor;
+uniform float u_capRange;
+uniform vec3 u_glow[4];
 uniform float u_structFloor;
 uniform float u_curveF[8];
 uniform float u_actorPixel;
@@ -29,7 +31,9 @@ uniform float u_debug;
 uniform float u_dangerBody;
 uniform vec3 u_cueColor;
 uniform sampler2D u_shape;
+uniform sampler2D u_arrive;
 uniform vec3 u_shapeLight;
+uniform float u_propLift;
 varying vec2 v_pos;
 uniform vec4 u_edge;
 uniform vec3 u_edgeArea;
@@ -92,7 +96,9 @@ void main() {
         L = mix(L, max(L, under), u_actorPixel);
     }
     float rim = 0.0;
-    if (player || (v_cls > 2.5 && v_cls < 3.5)) {
+    bool figure = player || (v_cls > 2.5 && v_cls < 3.5);
+    bool prop = (v_cls > 1.5 && v_cls < 2.5) || (v_cls > 3.5 && v_cls < 4.5);
+    if (figure) {
         vec4 surface = texture2D(u_shape, v_texCoords);
         vec2 slope = surface.rg * 2.0 - 1.0;
         slope *= step(0.02, length(slope));
@@ -109,10 +115,18 @@ void main() {
         vec2 outward = slope / max(length(slope), 0.0001);
         float facing = step(0.5, dot(outward, toward)) * step(outward.y, 0.4);
         rim = step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a;
+    } else if (prop) {
+        vec4 surface = texture2D(u_shape, v_texCoords);
+        vec2 slope = (surface.rg * 2.0 - 1.0) * smoothstep(0.5, 1.0, surface.b);
+        vec4 arrive = texture2D(u_arrive, v_puv);
+        vec2 flow = vec2(arrive.r - arrive.g, arrive.b - arrive.a) / max(arrive.r + arrive.g + arrive.b + arrive.a, 0.004);
+        vec3 lamp = normalize(vec3(flow, 0.6));
+        vec3 normal = vec3(slope, sqrt(max(1.0 - dot(slope, slope), 0.0)));
+        L *= mix(1.0, clamp(max(dot(normal, lamp), 0.0) / lamp.z, 0.55, 1.5), u_propLift);
     }
     L = lampLight(L) * edgeLight(v_pos);
 
-    bool cap = v_cls < 1.5 && is(col.rgb, u_capColor);
+    bool cap = v_cls < 1.5 && all(lessThan(abs(col.rgb - u_capColor), vec3(u_capRange)));
     if (cap) {
         L = vec3(0.0);
     }
@@ -121,8 +135,7 @@ void main() {
     vec3 structRGB = mix(vec3(luma), col.rgb, 0.3) * vec3(0.8, 0.9, 1.1) * u_structFloor;
     if (v_cls < 2.5) {
         rgb = max(rgb, structRGB);
-    } else if (is(col.rgb, vec3(1.0, 0.988, 0.961)) || is(col.rgb, vec3(1.0, 0.824, 0.0))
-            || is(col.rgb, vec3(1.0, 0.643, 0.0)) || is(col.rgb, vec3(0.890, 0.353, 0.004))) {
+    } else if (is(col.rgb, u_glow[0]) || is(col.rgb, u_glow[1]) || is(col.rgb, u_glow[2]) || is(col.rgb, u_glow[3])) {
         rgb = col.rgb;
     }
 
