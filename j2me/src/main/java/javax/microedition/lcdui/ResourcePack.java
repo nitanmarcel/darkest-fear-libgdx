@@ -34,7 +34,7 @@ public final class ResourcePack {
     private static final int PLAYED_KEPT = 12;
 
     private static final class Art {
-        Pixmap image;
+        Pixmap image, normal;
         int scale;
         int x, y, w, h, ax, ay;
         boolean anchored;
@@ -571,28 +571,40 @@ public final class ResourcePack {
         Graphics.batch.draw(texture(art), x, y, w, h, art.x, art.y, art.w, art.h, false, true);
     }
 
-    private static Art art(Pack pack, int scale, ZipFile zip, JsonValue value, String what) throws IOException {
-        String name = value.getString("file", null);
-        if (name == null) {
-            throw new IOException(what + " names no file");
-        }
-        Art art = new Art();
-        art.scale = scale;
-        art.image = pack.images.get(name);
-        if (art.image == null) {
+    private static Pixmap image(Pack pack, ZipFile zip, String name, String what) throws IOException {
+        Pixmap image = pack.images.get(name);
+        if (image == null) {
             ZipEntry entry = zip.getEntry(name);
             if (entry == null) {
                 throw new IOException(what + " needs " + name + ", which is missing");
             }
             try (InputStream in = zip.getInputStream(entry)) {
                 byte[] bytes = in.readAllBytes();
-                art.image = new Pixmap(bytes, 0, bytes.length);
+                image = new Pixmap(bytes, 0, bytes.length);
             }
-            pack.images.put(name, art.image);
+            pack.images.put(name, image);
         }
+        return image;
+    }
+
+    private static Art art(Pack pack, int scale, ZipFile zip, JsonValue value, String what) throws IOException {
+        String name = value.getString("file", null), normal = value.getString("normal", null);
+        if (name == null && normal == null) {
+            throw new IOException(what + " names no file");
+        }
+        Art art = new Art();
+        art.scale = scale;
+        art.normal = normal == null ? null : image(pack, zip, normal, what);
+        art.image = name == null ? null : image(pack, zip, name, what);
+        if (name == null) {
+            name = normal;
+        } else if (normal != null && (art.normal.getWidth() != art.image.getWidth() || art.normal.getHeight() != art.image.getHeight())) {
+            throw new IOException(what + " has a normal map that isn't the size of " + name);
+        }
+        Pixmap sized = art.image != null ? art.image : art.normal;
         JsonValue rect = value.get("rect");
-        art.w = art.image.getWidth();
-        art.h = art.image.getHeight();
+        art.w = sized.getWidth();
+        art.h = sized.getHeight();
         if (rect != null) {
             int[] r = rect.asIntArray();
             if (r.length != 4 || r[0] < 0 || r[1] < 0 || r[2] < 1 || r[3] < 1
@@ -646,7 +658,7 @@ public final class ResourcePack {
         for (int i = 0; i < sheet.ids.length; i++) {
             sheet.ids[i] = ids.get(i);
             sheet.attrs[i] = table[sheet.ids[i]].clone();
-            replaced |= art(sheet.ids[i]) != null;
+            replaced |= facing(sheet.ids[i]) != null;
         }
         if (!replaced) {
             sheet.ids = new int[0];
@@ -654,11 +666,24 @@ public final class ResourcePack {
         return sheet;
     }
 
+    static boolean replaces(Image image, int x, int y, int w, int h) {
+        int id = LightBridge.spriteAt(image, x, y, w, h);
+        return id >= 0 && art(id) != null;
+    }
+
     private static Art art(int id) {
+        return entry(id, true);
+    }
+
+    private static Art facing(int id) {
+        return entry(id, false);
+    }
+
+    private static Art entry(int id, boolean artOnly) {
         for (Pack pack : packs) {
             Art[] themed = pack.used() ? pack.sprites.get(id) : null;
             for (int i = 0; themed != null && i < THEMES.length; i++) {
-                if (THEMES[i].equals(theme)) {
+                if (THEMES[i].equals(theme) && !(artOnly && themed[i].image == null)) {
                     return themed[i];
                 }
             }
@@ -754,6 +779,32 @@ public final class ResourcePack {
             }
         }
         Pixmap surface = SpriteUpscaler.shape(big, LightBridge.spriteFrames(image));
+        surface.setBlending(Pixmap.Blending.None);
+        for (int i = 0; i < n; i++) {
+            Art map = facing(sheet.ids[i]), art = arts[i];
+            if (map == null || map.normal == null) {
+                continue;
+            }
+            int up = SpriteUpscaler.SCALE / map.scale, grow = art == null ? SpriteUpscaler.SCALE : SpriteUpscaler.SCALE / art.scale;
+            int ox = art == null ? x[i] * grow : (x[i] * art.scale + padX[i]) * grow;
+            int oy = art == null ? y[i] * grow : (y[i] * art.scale + padY[i]) * grow;
+            if (map.w * up != (art == null ? w[i] : art.w) * grow || map.h * up != (art == null ? h[i] : art.h) * grow) {
+                continue;
+            }
+            for (int py = 0; py < map.h; py++) {
+                for (int px = 0; px < map.w; px++) {
+                    int facing = map.normal.getPixel(map.x + px, map.y + py);
+                    if ((facing & 255) == 0) {
+                        continue;
+                    }
+                    int red = facing >>> 24, green = 255 - (facing >>> 16 & 255);
+                    for (int k = 0; k < up * up; k++) {
+                        int sx = ox + px * up + k % up, sy = oy + py * up + k / up;
+                        surface.drawPixel(sx, sy, red << 24 | green << 16 | (surface.getPixel(sx, sy) & 0xffff));
+                    }
+                }
+            }
+        }
         Texture detailed = new Texture(big);
         detailed.setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
         Texture shape = new Texture(surface);

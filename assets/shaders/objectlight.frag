@@ -32,6 +32,7 @@ uniform float u_dangerBody;
 uniform vec3 u_cueColor;
 uniform sampler2D u_shape;
 uniform vec3 u_shapeLight;
+uniform float u_propLift;
 varying vec2 v_pos;
 uniform vec4 u_edge;
 uniform vec3 u_edgeArea;
@@ -94,7 +95,9 @@ void main() {
         L = mix(L, max(L, under), u_actorPixel);
     }
     float rim = 0.0;
-    if (player || (v_cls > 2.5 && v_cls < 3.5)) {
+    bool figure = player || (v_cls > 2.5 && v_cls < 3.5);
+    bool prop = (v_cls > 1.5 && v_cls < 2.5) || (v_cls > 3.5 && v_cls < 4.5);
+    if (figure || prop) {
         vec4 surface = texture2D(u_shape, v_texCoords);
         vec2 slope = surface.rg * 2.0 - 1.0;
         slope *= step(0.02, length(slope));
@@ -107,10 +110,10 @@ void main() {
         vec3 lamp = vec3(toward * 0.94, 0.34);
         vec3 normal = vec3(slope, sqrt(max(1.0 - dot(slope, slope), 0.0)));
         float turn = directed * (max(dot(normal, lamp), 0.0) - lamp.z * normal.z);
-        L *= 1.0 + 2.0 * u_shapeLight.x * max(floor(turn * 3.0 + 0.5) / 3.0, 0.0);
+        L *= 1.0 + 2.0 * (figure ? u_shapeLight.x * max(floor(turn * 3.0 + 0.5) / 3.0, 0.0) : u_propLift * clamp(turn, 0.0, 0.5));
         vec2 outward = slope / max(length(slope), 0.0001);
         float facing = step(0.5, dot(outward, toward)) * step(outward.y, 0.4);
-        rim = step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a;
+        rim = figure ? step(0.5, directed) * u_shapeLight.y * facing * step(surface.b, u_shapeLight.z) * surface.a : 0.0;
     }
     L = lampLight(L) * edgeLight(v_pos);
 

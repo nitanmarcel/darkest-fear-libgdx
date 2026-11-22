@@ -11,6 +11,7 @@ final class LightingPanel implements DebugPanel {
     private final ImBoolean open = new ImBoolean(true);
     private final float[] actor = new float[1];
     private final float[] wall = new float[1];
+    private final float[] prop = new float[1];
     private final float[] ambient = new float[1];
 
     @Override
@@ -53,6 +54,10 @@ final class LightingPanel implements DebugPanel {
         wall[0] = LightTuning.wallSoft;
         if (ImGui.sliderFloat("Wall light softness", wall, 0f, 1f)) {
             LightTuning.wallSoft = wall[0];
+        }
+        prop[0] = LightTuning.propLift;
+        if (ImGui.sliderFloat("Furniture shading", prop, 0f, 2f)) {
+            LightTuning.propLift = prop[0];
         }
     }
 }

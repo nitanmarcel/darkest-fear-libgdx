@@ -185,6 +185,7 @@ final class SceneCompositor {
         sh.setUniformf("u_cueColor", CUE_R, CUE_G, CUE_B);
         sh.setUniformi("u_shape", 3);
         sh.setUniformf("u_shapeLight", SHAPE_LIFT, SHAPE_EDGE, SHAPE_EDGE_WIDTH / SpriteUpscaler.SHAPE_RANGE);
+        sh.setUniformf("u_propLift", LightTuning.propLift);
         boundShape = null;
         Graphics.setEdgeUniforms(sh);
         dimBody = Graphics.cuesEnabled ? PERSON_BODY : 0f;

@@ -650,8 +650,9 @@ public class Graphics {
         SceneCompositor.setBand(SceneCompositor.FX);
         float shade = transform == DIMMED ? 0.28f : 1f;
         batch.setColor(shade, shade, shade, 1f);
-        int detail = src.packed() ? SpriteUpscaler.SCALE : 1;
-        Texture tex = src.packed() ? src.upscaledTexture() : src.texture();
+        boolean pack = src.packed() && ResourcePack.replaces(src, xSrc, ySrc, width, height);
+        int detail = pack ? SpriteUpscaler.SCALE : 1;
+        Texture tex = pack ? src.upscaledTexture() : src.texture();
         if (wideActive) {
             float iw = 1f / tex.getWidth(), ih = 1f / tex.getHeight();
             batch.draw(tex, x, y, width, height, (xSrc * detail + REGION_INSET) * iw, (ySrc * detail + REGION_INSET) * ih,
