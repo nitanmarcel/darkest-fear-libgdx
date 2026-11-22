@@ -1,6 +1,7 @@
 package javax.microedition.lcdui;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.Pixmap;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.utils.JsonReader;
@@ -26,8 +27,11 @@ public final class ResourcePack {
     private static final String[] THEMES = {"wood", "stone", "tile"};
     private static final int[] THEME_SHEETS = {3, 4, 5};
     private static final String[] CUES = {"ember", "handle"};
+    private static final String[] AUDIO = {"mp3", "ogg", "wav"};
     private static final int GUTTER = 1;
     private static final int LIGHT_LEVELS = 8;
+    private static final float UNKNOWN_LENGTH = 1f;
+    private static final int PLAYED_KEPT = 12;
 
     private static final class Art {
         Pixmap image;
@@ -35,6 +39,18 @@ public final class ResourcePack {
         int x, y, w, h, ax, ay;
         boolean anchored;
         float[] cues, placed;
+    }
+
+    public static final class Audio {
+        public byte[] data;
+        public String extension;
+    }
+
+    private static final class Effect {
+        final List<Sound> sounds = new ArrayList<>();
+        final List<Float> seconds = new ArrayList<>();
+        float volume;
+        long busyUntil, loopId;
     }
 
     private static final class Sheet {
@@ -56,6 +72,9 @@ public final class ResourcePack {
         final Map<String, Art[]> floors = new HashMap<>();
         final Map<String, Art[]> shades = new HashMap<>();
         final Map<String, Art> hud = new HashMap<>();
+        final Map<Integer, Audio> sounds = new HashMap<>();
+        final Map<String, Effect> events = new HashMap<>();
+        final List<File> extracted = new ArrayList<>();
 
         boolean used() {
             return enabled && problem == null;
@@ -67,6 +86,8 @@ public final class ResourcePack {
     private static final Map<Pixmap, Texture> textures = new HashMap<>();
     private static final Map<Image, Sheet> sheets = new WeakHashMap<>();
     private static String theme = THEMES[0];
+    private static final Map<String, Effect> loops = new HashMap<>();
+    private static final java.util.ArrayDeque<String> played = new java.util.ArrayDeque<>();
 
     private ResourcePack() {
     }
@@ -98,6 +119,77 @@ public final class ResourcePack {
                 apply(image, sheet, table);
             }
         }
+    }
+
+    public static Audio audio(byte[] original) {
+        ensure();
+        int id = packs.isEmpty() ? -1 : LightBridge.soundId(original);
+        for (Pack pack : packs) {
+            Audio audio = id >= 0 && pack.used() ? pack.sounds.get(id) : null;
+            if (audio != null) {
+                return audio;
+            }
+        }
+        return null;
+    }
+
+    public static void play(String event, float gain, boolean unlessPlaying) {
+        Effect effect = effect(event);
+        long now = System.currentTimeMillis();
+        if (effect == null || (unlessPlaying && now < effect.busyUntil)) {
+            return;
+        }
+        int pick = (int) (Math.random() * effect.sounds.size());
+        effect.sounds.get(pick).play(Math.min(1f, gain * effect.volume));
+        effect.busyUntil = now + (long) (effect.seconds.get(pick) * 1000);
+        played.addFirst(event);
+        if (played.size() > PLAYED_KEPT) {
+            played.removeLast();
+        }
+    }
+
+    public static String[] events() {
+        ensure();
+        java.util.TreeSet<String> names = new java.util.TreeSet<>();
+        for (Pack pack : packs) {
+            if (pack.used()) {
+                names.addAll(pack.events.keySet());
+            }
+        }
+        return names.toArray(new String[0]);
+    }
+
+    public static String[] played() {
+        return played.toArray(new String[0]);
+    }
+
+    public static void loop(String event, float gain) {
+        Effect effect = gain > 0f ? effect(event) : null, playing = loops.get(event);
+        if (effect != playing) {
+            if (playing != null) {
+                playing.sounds.get(0).stop(playing.loopId);
+            }
+            if (effect == null) {
+                loops.remove(event);
+            } else {
+                loops.put(event, effect);
+                effect.loopId = effect.sounds.get(0).loop(0f);
+            }
+        }
+        if (effect != null) {
+            effect.sounds.get(0).setVolume(effect.loopId, Math.min(1f, gain * effect.volume));
+        }
+    }
+
+    private static Effect effect(String event) {
+        ensure();
+        for (Pack pack : packs) {
+            Effect effect = pack.used() ? pack.events.get(event) : null;
+            if (effect != null) {
+                return effect;
+            }
+        }
+        return null;
     }
 
     public static int count() {
@@ -201,9 +293,18 @@ public final class ResourcePack {
         for (Texture texture : textures.values()) {
             texture.dispose();
         }
+        loops.clear();
         for (Pack pack : packs) {
             for (Pixmap image : pack.images.values()) {
                 image.dispose();
+            }
+            for (Effect effect : pack.events.values()) {
+                for (Sound sound : effect.sounds) {
+                    sound.dispose();
+                }
+            }
+            for (File file : pack.extracted) {
+                file.delete();
             }
         }
         sheets.clear();
@@ -284,10 +385,70 @@ public final class ResourcePack {
             for (JsonValue piece = json.getChild("hud"); piece != null; piece = piece.next) {
                 pack.hud.put(piece.name, art(pack, packScale, zip, piece, "HUD piece " + piece.name));
             }
+            for (JsonValue sound = json.getChild("sounds"); sound != null; sound = sound.next) {
+                String name = sound.getString("file", null), what = "sound " + sound.name;
+                if (name == null) {
+                    throw new IOException(what + " names no file");
+                }
+                pack.sounds.put(Integer.parseInt(sound.name), audio(zip, name, what));
+            }
+            for (JsonValue event = json.getChild("events"); event != null; event = event.next) {
+                Effect effect = new Effect();
+                effect.volume = event.getFloat("volume", 1f);
+                String what = "event " + event.name;
+                for (JsonValue name = event.getChild("files"); name != null; name = name.next) {
+                    Audio audio = audio(zip, name.asString(), what);
+                    File copy = File.createTempFile("sound", "." + audio.extension);
+                    copy.deleteOnExit();
+                    pack.extracted.add(copy);
+                    java.nio.file.Files.write(copy.toPath(), audio.data);
+                    effect.sounds.add(Gdx.audio.newSound(Gdx.files.absolute(copy.getPath())));
+                    effect.seconds.add(seconds(audio));
+                }
+                if (effect.sounds.isEmpty()) {
+                    throw new IOException(what + " names no files");
+                }
+                pack.events.put(event.name, effect);
+            }
             pack.scale = packScale;
         } catch (Exception e) {
             pack.problem = "This pack can't be used: " + e.getMessage() + ".";
         }
+    }
+
+    private static Audio audio(ZipFile zip, String name, String what) throws IOException {
+        Audio audio = new Audio();
+        audio.extension = name.substring(name.lastIndexOf('.') + 1).toLowerCase();
+        if (!java.util.Arrays.asList(AUDIO).contains(audio.extension)) {
+            throw new IOException(what + " isn't an MP3, OGG or WAV file");
+        }
+        ZipEntry entry = zip.getEntry(name);
+        if (entry == null) {
+            throw new IOException(what + " needs " + name + ", which is missing");
+        }
+        try (InputStream in = zip.getInputStream(entry)) {
+            audio.data = in.readAllBytes();
+        }
+        return audio;
+    }
+
+    private static float seconds(Audio audio) {
+        byte[] d = audio.data;
+        int rate = 0;
+        for (int at = 12; audio.extension.equals("wav") && at + 8 <= d.length; ) {
+            int size = (d[at + 4] & 255) | (d[at + 5] & 255) << 8 | (d[at + 6] & 255) << 16 | (d[at + 7] & 255) << 24;
+            String chunk = new String(d, at, 4, java.nio.charset.StandardCharsets.ISO_8859_1);
+            if (size < 0) {
+                break;
+            }
+            if (chunk.equals("fmt ") && at + 20 <= d.length) {
+                rate = (d[at + 16] & 255) | (d[at + 17] & 255) << 8 | (d[at + 18] & 255) << 16 | (d[at + 19] & 255) << 24;
+            } else if (chunk.equals("data") && rate > 0) {
+                return Math.min(size, d.length - at - 8) / (float) rate;
+            }
+            at += 8 + size + (size & 1);
+        }
+        return UNKNOWN_LENGTH;
     }
 
     static float[] cues(int id) {

@@ -6,6 +6,7 @@ import com.badlogic.gdx.backends.lwjgl3.Lwjgl3WindowAdapter;
 import darkestfear.DarkestFearGame;
 import darkestfear.GameFiles;
 import darkestfear.debug.Debug;
+import darkestfear.lwjgl3.audio.PackPlayer;
 import darkestfear.lwjgl3.audio.PlayerCompat;
 import darkestfear.lwjgl3.debug.ImGuiDebugUi;
 
@@ -21,7 +22,8 @@ import javax.microedition.media.Manager;
 
 public class Lwjgl3Launcher implements GameFiles {
     public static void main(String[] args) {
-        Manager.setPlayerFactory(PlayerCompat::new);
+        Manager.setPlayerFactory((stream, packExtension) -> packExtension == null ? new PlayerCompat(stream)
+                : new PackPlayer(stream.readAllBytes(), packExtension));
 
         if (Boolean.getBoolean("darkestfear.debug")) {
             Debug.install(new ImGuiDebugUi());

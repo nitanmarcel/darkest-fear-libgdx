@@ -53,6 +53,7 @@ public abstract class Canvas extends Displayable {
     public static void renderFrame(Graphics g) {
         MenuOverlay.applyPending();
         ResourcePack.sync();
+        darkestfear.menu.SoundEvents.tick();
         MenuOverlay.keepSplash();
         GameBridge.keepOverlay();
         Displayable d = Display.current();

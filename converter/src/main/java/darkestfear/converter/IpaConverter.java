@@ -27,6 +27,7 @@ public final class IpaConverter {
     private static final String[] ATLASES = {"LEVEL_GRAPHICS", "CHARACTERS", "HUD"};
     private static final String[] THEMES = {"wood", "stone", "tile"};
     private static final int SCALE = 2;
+    private static final double PEAK = 0.98;
 
     private final Map<String, Map<String, Sprite>> atlases = new LinkedHashMap<>();
 
@@ -51,6 +52,8 @@ public final class IpaConverter {
             throw new IOException(ipa + " doesn't exist.");
         }
         Map<String, byte[]> images = new LinkedHashMap<>();
+        List<String> sounds = new ArrayList<>();
+        List<String> events = new ArrayList<>();
         try (ZipFile zip = new ZipFile(ipa)) {
             String data = null;
             for (ZipEntry e : Collections.list(zip.entries())) {
@@ -65,11 +68,34 @@ public final class IpaConverter {
                 images.put(atlas + ".png", straightAlpha(read(zip, data + atlas + ".png"), atlas));
                 atlases.put(atlas, table(read(zip, data + atlas + ".dat")));
             }
+            for (String[] line : mapping().get("sounds")) {
+                images.put("sounds/" + line[1], read(zip, data + "audio/" + line[1]));
+                sounds.add("    \"" + line[0] + "\": { \"file\": \"sounds/" + line[1] + "\" }");
+            }
+            for (String[] line : mapping().get("events")) {
+                List<String> files = new ArrayList<>();
+                byte[][] audio = new byte[line.length][];
+                double boost = Double.MAX_VALUE;
+                for (int i = 2; i < line.length; i++) {
+                    audio[i] = read(zip, data + "audio/" + line[i]);
+                    boost = Math.min(boost, headroom(audio[i]));
+                }
+                String folder = boost > 1 ? "sounds/x" + Math.round(boost * 100) + "/" : "sounds/";
+                for (int i = 2; i < line.length; i++) {
+                    images.put(folder + line[i], boost > 1 ? amplified(audio[i], boost) : audio[i]);
+                    files.add("\"" + folder + line[i] + "\"");
+                }
+                String volume = String.format(java.util.Locale.ROOT, "%.2f", Double.parseDouble(line[1]) / Math.max(boost, 1));
+                events.add("    \"" + line[0] + "\": { \"volume\": " + volume + ", \"files\": [" + String.join(", ", files) + "] }");
+            }
         } catch (java.util.zip.ZipException e) {
             throw new IOException(ipa + " can't be opened as an IPA.");
         }
 
         String json = manifest();
+        int end = json.lastIndexOf("\n}");
+        json = json.substring(0, end) + ",\n\n  \"sounds\": {\n" + String.join(",\n", sounds) + "\n  },\n\n  \"events\": {\n"
+                + String.join(",\n", events) + "\n  }" + json.substring(end);
         File parent = pack.getAbsoluteFile().getParentFile();
         File part = File.createTempFile("pack", ".part", parent);
         try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(part.toPath()))) {
@@ -84,6 +110,46 @@ public final class IpaConverter {
         }
         Files.move(part.toPath(), pack.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         System.out.println("Wrote " + pack);
+    }
+
+    private static int[] samples(byte[] wav) {
+        boolean pcm = false;
+        for (int at = 12; at + 8 <= wav.length; ) {
+            int size = (wav[at + 4] & 255) | (wav[at + 5] & 255) << 8 | (wav[at + 6] & 255) << 16 | (wav[at + 7] & 255) << 24;
+            String chunk = new String(wav, at, 4, StandardCharsets.ISO_8859_1);
+            if (size < 0) {
+                break;
+            }
+            if (chunk.equals("fmt ") && at + 24 <= wav.length) {
+                pcm = wav[at + 8] == 1 && wav[at + 9] == 0 && wav[at + 22] == 16 && wav[at + 23] == 0;
+            } else if (chunk.equals("data")) {
+                return pcm ? new int[] {at + 8, Math.min(size, wav.length - at - 8) & ~1} : null;
+            }
+            at += 8 + size + (size & 1);
+        }
+        return null;
+    }
+
+    private static double headroom(byte[] audio) {
+        int[] data = audio.length > 12 && audio[0] == 'R' && audio[8] == 'W' ? samples(audio) : null;
+        int peak = 0;
+        for (int i = 0; data != null && i < data[1]; i += 2) {
+            peak = Math.max(peak, Math.abs((short) ((audio[data[0] + i] & 255) | audio[data[0] + i + 1] << 8)));
+        }
+        return peak == 0 ? 1 : Math.max(1, PEAK * Short.MAX_VALUE / peak);
+    }
+
+    private static byte[] amplified(byte[] wav, double gain) {
+        byte[] out = wav.clone();
+        int[] data = samples(wav);
+        for (int i = 0; i < data[1]; i += 2) {
+            int at = data[0] + i;
+            long value = Math.round((short) ((wav[at] & 255) | wav[at + 1] << 8) * gain);
+            int sample = (int) Math.max(Short.MIN_VALUE, Math.min(Short.MAX_VALUE, value));
+            out[at] = (byte) sample;
+            out[at + 1] = (byte) (sample >> 8);
+        }
+        return out;
     }
 
     private static byte[] straightAlpha(byte[] png, String atlas) throws IOException {
